@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1203</width>
-    <height>952</height>
+    <height>925</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -46,26 +46,6 @@
       </item>
       <item>
        <widget class="QTextBrowser" name="logTextBrowser"/>
-      </item>
-     </layout>
-    </item>
-    <item>
-     <layout class="QVBoxLayout" name="verticalLayout_2">
-      <item>
-       <widget class="QLabel" name="shellLabel">
-        <property name="text">
-         <string>Current shell</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QTextBrowser" name="shellTextBrowser"/>
-      </item>
-      <item>
-       <widget class="QLineEdit" name="shellLineEdit"/>
       </item>
      </layout>
     </item>

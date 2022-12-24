@@ -18,9 +18,10 @@ class ShellWindow : public QWidget{
     Q_OBJECT
 
 private:
+    int fd;
 
 public:
-    ShellWindow(QWidget *parent = nullptr);
+    ShellWindow(int fd = -1, QWidget *parent = nullptr);
     ~ShellWindow();
 
 private slots: // Slots are functions that are called when a signal is emitted

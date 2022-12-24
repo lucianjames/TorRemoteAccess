@@ -9,9 +9,10 @@
 #include "./ui_shellwindow.h"
 
 
-ShellWindow::ShellWindow(QWidget *parent) : QWidget(parent), ui(new Ui::ShellWindow){ // Constructor
+ShellWindow::ShellWindow(int fd, QWidget* parent) : QWidget(parent), ui(new Ui::ShellWindow){ // Constructor
     ui->setupUi(this);
     setWindowIcon(QIcon(":/icon.ico"));
+    setWindowTitle("Shell | fd: " + QString::number(fd));
     // Make it so that when enter is pressed on the lineEdit, hello world is printed
     connect(ui->lineEdit, &QLineEdit::returnPressed, this, &ShellWindow::helloWorld);
 }
