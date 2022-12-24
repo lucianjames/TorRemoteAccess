@@ -165,7 +165,6 @@ void MainWindow::activateShell(int fd){
     // Spawn a shellwindow
     ShellWindow *shellWindow = new ShellWindow(fd);
     shellWindow->show();
-    shellWindow->setWindowTitle("Shell - fd: " + QString::number(fd));
 }
 
 
