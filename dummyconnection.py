@@ -19,6 +19,7 @@ while(1):
     # Receive data from the server, if it is "ping;" then send back "ping;pong;"
     data = sock.recv(1024)
     if data.decode("utf-8") == "ping;":
+        print("sending pong")
         sock.send("ping;pong;".encode("utf-8"))
     if data.decode("utf-8") == "":
         break
