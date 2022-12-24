@@ -54,10 +54,8 @@ public: // Everything public for testing and hacking
                 send(this->connections[i].fd, "ping;", 5, 0); // We expect a response of "ping;pong;"" from the client
                 char buffer[11] = {0};
                 int valread = recv(this->connections[i].fd, buffer, 11, 0);
-                printf("Received: %s\n", buffer);
                 if (valread == 0 || std::string(buffer) != "ping;pong;"){
                     // If the client fails to respond to the ping, or the response is invalid, remove the connection from the connections vector
-                    printf("Removing connection\n");
                     this->connectionsMutex.lock(); // Lock the connections vector to ensure no other threads are accessing it at the same time
                     close(this->connections[i].fd); // Close the socket
                     this->connections.erase(this->connections.begin() + i); // Remove the connection from the connections vector
@@ -187,7 +185,6 @@ public: // Everything public for testing and hacking
 
 
 int main() {
-    /*
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
 
@@ -196,10 +193,10 @@ int main() {
 
     int nframes = 0;
     float fval = 1.23f;
-    */
 
     server serverInstance(8080);
 
+    /*
     while(1){
         std::this_thread::sleep_for(std::chrono::seconds(5));
         // Print the number of connections
@@ -210,8 +207,8 @@ int main() {
         }
         printf("====================================\n\n");
     }
-
-    /*
+    */
+    
     while (true) {
         ImTui_ImplNcurses_NewFrame();
         ImTui_ImplText_NewFrame();
@@ -227,6 +224,20 @@ int main() {
         ImGui::Text("Float:");
         ImGui::SameLine();
         ImGui::SliderFloat("##float", &fval, 0.0f, 10.0f);
+        ImGui::End();
+
+        /*
+            Connections list window
+        */
+        ImGui::SetNextWindowPos(ImVec2(4, 4), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(50.0, 20.0), ImGuiCond_Once);
+        ImGui::Begin("Connections");
+        ImGui::ListBoxHeader("##connections", ImVec2(-1, -1));
+        for (auto c : serverInstance.connManager.connections){
+            ImGui::Text("%s@%s - %s", c.username.c_str(), c.hostname.c_str(), c.publicIp.c_str());
+        }
+        ImGui::ListBoxFooter();
+
 
         ImGui::End();
         ImGui::Render();
@@ -236,7 +247,6 @@ int main() {
 
     ImTui_ImplText_Shutdown();
     ImTui_ImplNcurses_Shutdown();
-    */
 
     return 0;
 }
