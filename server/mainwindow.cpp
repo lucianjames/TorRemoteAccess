@@ -35,7 +35,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 }
 
 MainWindow::~MainWindow(){
-    ::close(this->fd);
+    printf("~MainWindow() called\n");
+    for(int i = 0; i < this->connections.size(); i++){
+        int closeResult = ::close(this->connections[i].fd);
+        printf("Closed connection %d with fd %d. close() returned %d\n", i, this->connections[i].fd, closeResult);
+    }
+    int closeResult = ::close(this->fd);
+    printf("Closed server socket with fd %d. close() returned %d\n", this->fd, closeResult);
     delete ui;
     exit(0); // Exit the program when the window is closed
 }
@@ -47,6 +53,12 @@ void MainWindow::startServer(){
         return;
     }
     ui->logTextBrowser->append("Socket created");
+    int opt = 1;
+    if(setsockopt(this->fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0){
+        ui->logTextBrowser->append("Failed to set socket options. perror: " + QString::fromStdString(strerror(errno)));
+        return;
+    }
+    ui->logTextBrowser->append("Socket options set");
     this->serverAddress.sin_family = AF_INET;
     this->serverAddress.sin_addr.s_addr = INADDR_ANY;
     this->serverAddress.sin_port = htons(this->port);
