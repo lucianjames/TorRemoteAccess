@@ -225,24 +225,12 @@ int main() {
         ImTui_ImplText_NewFrame();
         ImGui::NewFrame();
 
-
-        ImGui::SetNextWindowPos(ImVec2(4, 27), ImGuiCond_Once);
-        ImGui::SetNextWindowSize(ImVec2(50.0, 10.0), ImGuiCond_Once);
-        ImGui::Begin("Hello, world!");
-        ImGui::Text("NFrames = %d", nframes++);
-        ImGui::Text("Mouse Pos : x = %g, y = %g", ImGui::GetIO().MousePos.x, ImGui::GetIO().MousePos.y);
-        ImGui::Text("Time per frame %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-        ImGui::Text("Float:");
-        ImGui::SameLine();
-        ImGui::SliderFloat("##float", &fval, 0.0f, 10.0f);
-        ImGui::End();
-
-
         /*
             Connections list window
         */
-        ImGui::SetNextWindowPos(ImVec2(4, 4), ImGuiCond_Once);
-        ImGui::SetNextWindowSize(ImVec2(50.0, 20.0), ImGuiCond_Once);
+        // ImGuiCond_Always forces the window to always be in the following position and size:
+        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(30.0, ImGui::GetIO().DisplaySize.y), ImGuiCond_Always);
         ImGui::Begin("Connections");
         ImGui::PushItemWidth(-1);
         ImGui::ListBox("##connections", 
@@ -254,6 +242,24 @@ int main() {
             at that index. The return value is true, which means that the listbox will continue to iterate through the connections vector until it reaches the end.
         */
         ImGui::PopItemWidth();
+        ImGui::End();
+
+
+        /*
+            Shell window
+                Currently, just displays information about the selected connection
+        */
+        ImGui::SetNextWindowPos(ImVec2(40.0, 0), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x - 30.0, ImGui::GetIO().DisplaySize.y - 3.0), ImGuiCond_Once);
+        ImGui::Begin("Shell");
+        if(connectionInfo[0] != "No active connections...."){
+            ImGui::Text("Selected connection index: %d", connectionsListSelected);
+            ImGui::Text("fd: %d, publicIp: %s, username: %s, hostname: %s", 
+                        serverInstance.connManager.connections[connectionsListSelected].fd, 
+                        serverInstance.connManager.connections[connectionsListSelected].publicIp.c_str(), 
+                        serverInstance.connManager.connections[connectionsListSelected].username.c_str(), 
+                        serverInstance.connManager.connections[connectionsListSelected].hostname.c_str());
+        }
         ImGui::End();
 
 
