@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>631</width>
-    <height>652</height>
+    <width>1203</width>
+    <height>952</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -30,21 +30,31 @@
       <item>
        <widget class="QListView" name="connectionsListView"/>
       </item>
-      <item>
-       <widget class="QPushButton" name="openShellButton">
-        <property name="text">
-         <string>Open shell on selected connection</string>
-        </property>
-       </widget>
-      </item>
      </layout>
     </item>
     <item>
      <layout class="QVBoxLayout" name="verticalLayout">
       <item>
+       <widget class="QLabel" name="logLabel">
+        <property name="text">
+         <string>Log</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QTextBrowser" name="logTextBrowser"/>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <layout class="QVBoxLayout" name="verticalLayout_2">
+      <item>
        <widget class="QLabel" name="shellLabel">
         <property name="text">
-         <string>Shell</string>
+         <string>Current shell</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
@@ -55,7 +65,7 @@
        <widget class="QTextBrowser" name="shellTextBrowser"/>
       </item>
       <item>
-       <widget class="QLineEdit" name="commandInputLineEdit"/>
+       <widget class="QLineEdit" name="shellLineEdit"/>
       </item>
      </layout>
     </item>
@@ -66,7 +76,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>631</width>
+     <width>1203</width>
      <height>30</height>
     </rect>
    </property>

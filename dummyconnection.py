@@ -15,5 +15,14 @@ sock.send("127.69.69.69;bruh moment;computah;".encode("utf-8"))
 data = sock.recv(1024)
 print(data)
 
+while(1):
+    # Receive data from the server, if it is "ping;" then send back "ping;pong;"
+    data = sock.recv(1024)
+    if data.decode("utf-8") == "ping;":
+        sock.send("ping;pong;".encode("utf-8"))
+    if data.decode("utf-8") == "":
+        break
+    print(data)
+
 # Close the connection
 sock.close()
