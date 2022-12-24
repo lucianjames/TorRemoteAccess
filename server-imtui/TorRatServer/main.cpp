@@ -208,8 +208,19 @@ int main() {
         printf("====================================\n\n");
     }
     */
-    
+
+
+    int connectionsListSelected = 0;
     while (true) {
+        // All the stuff that isnt directy calling ImGui
+        std::vector<std::string> connectionInfo;
+        for(auto c : serverInstance.connManager.connections){
+            connectionInfo.push_back(c.publicIp + ";" + c.username + ";" + c.hostname);
+        }
+        if(connectionInfo.size() == 0){
+            connectionInfo.push_back("No active connections....");
+        }
+
         ImTui_ImplNcurses_NewFrame();
         ImTui_ImplText_NewFrame();
         ImGui::NewFrame();
@@ -226,20 +237,26 @@ int main() {
         ImGui::SliderFloat("##float", &fval, 0.0f, 10.0f);
         ImGui::End();
 
+
         /*
             Connections list window
         */
         ImGui::SetNextWindowPos(ImVec2(4, 4), ImGuiCond_Once);
         ImGui::SetNextWindowSize(ImVec2(50.0, 20.0), ImGuiCond_Once);
         ImGui::Begin("Connections");
-        ImGui::ListBoxHeader("##connections", ImVec2(-1, -1));
-        for (auto c : serverInstance.connManager.connections){
-            ImGui::Text("%s@%s - %s", c.username.c_str(), c.hostname.c_str(), c.publicIp.c_str());
-        }
-        ImGui::ListBoxFooter();
-
-
+        ImGui::PushItemWidth(-1);
+        ImGui::ListBox("##connections", 
+                       &connectionsListSelected, 
+                       [](void* data, int idx, const char** out_text){ auto& connections = *static_cast<std::vector<std::string>*>(data); *out_text = connections[idx].c_str();  return true;},
+                       static_cast<void*>(&connectionInfo), connectionInfo.size(), connectionInfo.size());
+        /*
+            The messy lambda function above gets the connection info from the connections vector at the index idx, and sets the out_text pointer to the c_str() of the connection info string
+            at that index. The return value is true, which means that the listbox will continue to iterate through the connections vector until it reaches the end.
+        */
+        ImGui::PopItemWidth();
         ImGui::End();
+
+
         ImGui::Render();
         ImTui_ImplText_RenderDrawData(ImGui::GetDrawData(), screen);
         ImTui_ImplNcurses_DrawScreen();
