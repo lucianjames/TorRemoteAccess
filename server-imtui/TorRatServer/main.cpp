@@ -209,6 +209,7 @@ public:
             int bytesRead = recv(this->conn.fd, buffer, 1024, 0);
             if(bytesRead == 0){
                 this->conn.inUse = false;
+                this->active = false;
                 return;
             }
             std::string message = buffer; // Convert to string for easier parsing
@@ -225,10 +226,6 @@ public:
     }
 
     void drawShell(){
-        if(this->conn.inUse == false){
-            this->active = false;
-            return;
-        }
         // If the user presses escape while the window is focused, close the shell
         if(ImGui::IsKeyPressed(256)){
             this->conn.inUse = false;
@@ -252,20 +249,17 @@ public:
         // Hide the label for the input box
         ImGui::PushItemWidth(-1);
         if(ImGui::InputText("CMD", this->inputBuffer, IM_ARRAYSIZE(this->inputBuffer), ImGuiInputTextFlags_EnterReturnsTrue)){
-            // If the user enters "exit", close the shell
-            if(strcmp(this->inputBuffer, "exit") == 0){
-                ImGui::PopItemWidth();
-                ImGui::End();
-                this->conn.inUse = false;
-                this->active = false;
-                return;
-            }
             // Send the input to the connection
             send(this->conn.fd, this->inputBuffer, strlen(this->inputBuffer), 0);
             this->messagesMutex.lock();
             this->messages.push_back(this->inputBuffer);
             this->messagesMutex.unlock();
             memset(this->inputBuffer, 0, 1024);
+        }
+        // Create a button to close the shell
+        if(ImGui::Button("Close")){
+            this->conn.inUse = false;
+            this->active = false;
         }
         ImGui::PopItemWidth();
         ImGui::End();
@@ -288,12 +282,6 @@ int main() {
 
     int connectionsListSelected = 0;
     while (true) {
-        // All the stuff that isnt directy calling ImGui
-        std::vector<std::string> connectionInfo;
-        for(auto c : serverInstance.connManager.connections){
-            connectionInfo.push_back(c.publicIp + ";" + c.username + ";" + c.hostname);
-        }
-
         for(auto s : shells){
             if(s->active == false){
                 serverInstance.connManager.connections.push_back(s->conn);
@@ -303,7 +291,7 @@ int main() {
 
         // If the user selects a connection and presses enter, create a shell for it
         if(ImGui::IsKeyPressed(10) 
-            && connectionInfo.size() > 0
+            && serverInstance.connManager.connections.size() > 0
             && serverInstance.connManager.connections[connectionsListSelected].inUse == false
             && std::find_if(shells.begin(), shells.end(), [&](shell* s){return s->conn.fd == serverInstance.connManager.connections[connectionsListSelected].fd;}) == shells.end()
             ){
@@ -325,16 +313,16 @@ int main() {
         ImGui::Begin("Prepared connections");
         ImGui::TextWrapped("Press enter to open a selected connection. Once a shell is opened, the connection will be removed from this list.");
         ImGui::PushItemWidth(-1);
-        if(connectionInfo.size() == 0){
+        if(serverInstance.connManager.connections.size() == 0){
             ImGui::TextWrapped("No connections available");
         }else{
             ImGui::ListBox("##connections", 
                         &connectionsListSelected, 
-                        [](void* data, int idx, const char** out_text){ auto& connections = *static_cast<std::vector<std::string>*>(data); *out_text = connections[idx].c_str();  return true;},
-                            static_cast<void*>(&connectionInfo), 
-                            connectionInfo.size(), 
-                            connectionInfo.size()
-                            );
+                        [](void* data, int idx, const char** out_text){ auto& connections = *static_cast<std::vector<connection>*>(data); *out_text = (connections[idx].username).c_str();  return true;},
+                        static_cast<void*>(&serverInstance.connManager.connections),
+                        serverInstance.connManager.connections.size(),
+                        serverInstance.connManager.connections.size()
+                        );
         }
         /*
             The messy lambda function above gets the connection info from the connections vector at the index idx, and sets the out_text pointer to the c_str() of the connection info string
@@ -356,10 +344,10 @@ int main() {
             ImGui::ListBox("##shells", 
                         &connectionsListSelected, 
                         [](void* data, int idx, const char** out_text){ auto& shells = *static_cast<std::vector<shell*>*>(data); *out_text = (shells[idx]->conn.username).c_str();  return true;},
-                            static_cast<void*>(&shells), 
-                            shells.size(), 
-                            shells.size()
-                            );
+                        static_cast<void*>(&shells), 
+                        shells.size(), 
+                        shells.size()
+                        );
         }
         ImGui::PopItemWidth();
         ImGui::End();
