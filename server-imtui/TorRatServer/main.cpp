@@ -22,8 +22,9 @@
 
 
 /*
-    Class for a connection to the server
-    ! Dont run threads in this classs, it will make everything bad !
+    Class for a connection to the server.
+    Mostly holds data about the connection.
+    Also has useful functions :)
 */
 class connection{
 public: // Making everything public temporarily
@@ -117,6 +118,67 @@ public: // Making everything public temporarily
     }
 };
 
+
+/*
+    Class for a terminal window
+*/
+class terminal{
+public: // testing purpose :D
+    std::unique_ptr<connection> conn; // Pointer to the connection that this terminal is connected to
+    std::vector<std::string> terminalBuffer; // Buffer for the terminal - holds the lines of text to be displayed
+    std::mutex terminalBufferMutex; // Mutex for the terminal buffer
+    char inputBuffer[2048] = {0}; // Buffer for the input box
+
+    /*
+        Constructor
+    */
+    terminal(std::unique_ptr<connection> conn){
+        this->conn = std::move(conn);
+        this->conn->sockFdMutex.lock(); // We are just going to lock the socket file descriptor for the duration of the terminal
+        // This ensures that the terminal class is the only thing using the socket file descriptor
+        // Since we know the mutex is locked (for this class) as soon as the class is created, we dont need to bother checking it in any of the other functions
+    }
+
+    ~terminal(){
+        this->conn->sockFdMutex.unlock();
+    }
+
+    // This function is used to take the conn pointer back from the terminal class
+    std::unique_ptr<connection> getConn(){
+        return std::move(this->conn);
+    }
+
+    void processCommand(){
+
+    }
+
+    void drawTerminalWindow(){
+        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(25, 6), ImGuiCond_Once);
+        ImGui::Begin(("Terminal " + std::to_string(this->conn->sockFd)).c_str());
+        ImGui::BeginChild("Terminal buffer", ImVec2(0, -3), false);
+        for(std::string line : this->terminalBuffer){
+            ImGui::TextWrapped(line.c_str());
+        }
+        if(ImGui::GetScrollY() >= ImGui::GetScrollMaxY()){
+            ImGui::SetScrollHereY(1.0f);
+        }
+        ImGui::EndChild();
+        ImGui::Separator();
+        if(ImGui::InputText("cmd input", this->inputBuffer, IM_ARRAYSIZE(this->inputBuffer), ImGuiInputTextFlags_EnterReturnsTrue)){
+            // Call command processing function
+            this->processCommand();
+        }
+        ImGui::End();
+    }
+
+
+};
+
+
+/*
+    The server class manages new connections and checking the status of existing connections
+*/
 class server{
 public: // Also making everything public temporarily
     int serverListenerFd; // Socket file descriptor for the server to listen for new connections on
