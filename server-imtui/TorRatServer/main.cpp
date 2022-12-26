@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <algorithm>
 #include <iostream>
+#include <signal.h>
 
 #define perror_exit(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
@@ -33,7 +34,6 @@ public: // Making everything public temporarily
     std::string hostname;
     std::string publicIp; // Public IP of the client - sent by the client since we can't get it from the socket due to the usage of TOR
     std::mutex sockFdMutex; // Only one thread can use the socket file descriptor at a time
-    bool drawDebugWindow = false;
     bool lastConnectivityCheck = false; // Last result of the connectivity check
 
     /*
@@ -45,6 +45,12 @@ public: // Making everything public temporarily
        this->addrlen = addrlen;
     }
 
+    ~connection(){
+        this->sockFdMutex.lock();
+        close(this->sockFd);
+        this->sockFdMutex.unlock();
+    }
+
     bool sanityCheck(){
         if(this->sockFd < 0){
             return false;
@@ -52,21 +58,15 @@ public: // Making everything public temporarily
         return true;
     }
 
-    void draw(){
+    void drawDebugWindow(){
         ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
         ImGui::SetNextWindowSize(ImVec2(25, 6), ImGuiCond_Once);
-        ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " info").c_str());
+        ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " debug info").c_str());
         ImGui::Text("Username: %s", this->username.c_str());
         ImGui::Text("Hostname: %s", this->hostname.c_str());
         ImGui::Text("Public IP: %s", this->publicIp.c_str());
         ImGui::Text("Connectivity: %s", (this->lastConnectivityCheck)?"OK":"ERR");
         ImGui::End();
-    }
-
-    void update(){
-        if(this->drawDebugWindow){
-            this->draw();
-        }
     }
 
     bool connectivityCheck(){
@@ -122,10 +122,9 @@ public: // Also making everything public temporarily
     int serverListenerFd; // Socket file descriptor for the server to listen for new connections on
     struct sockaddr_in address; // Address of the server
     int opt = 1; // Used for setsockopt
-    std::thread listenerThread; // Thread for the server to listen for new connections on
     std::vector<std::unique_ptr<connection>> connections; // Vector of connections to the server
     std::mutex connectionsMutex; // Mutex for the connections vector
-    bool drawDebugWindow = false;
+    bool DEBUG = false;
     int selectedConnection = 0; // Index of the selected connection in the connections vector
 
     /*
@@ -154,8 +153,8 @@ public: // Also making everything public temporarily
         }
 
         // Starting the listener thread
-        this->listenerThread = std::thread(&server::listenerThreadFunction, this);
-        this->listenerThread.detach(); // Detaching the thread so it doesn't need to be joined
+        std::thread listenerThread(&server::listenerThreadFunction, this);
+        listenerThread.detach(); // Detaching the thread so it doesn't need to be joined
 
         // Starting the connectivity checking thread
         std::thread connectivityCheckThread(&server::connectivityCheckThreadFunction, this);
@@ -163,7 +162,7 @@ public: // Also making everything public temporarily
     }
 
     void draw(){
-        if(this->drawDebugWindow){
+        if(this->DEBUG){
             ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
             ImGui::SetNextWindowSize(ImVec2(30, 4), ImGuiCond_Once);
             ImGui::Begin("Server Debug Window");
@@ -178,9 +177,11 @@ public: // Also making everything public temporarily
         // Have to make a vector of strings to pass to the ListBox function
         // Because it requires a pointer to the stuff to write onto the screen >:(
         std::vector<std::string> connInfoStrings;
+        this->connectionsMutex.lock();
         for(auto &c : this->connections){
             connInfoStrings.push_back(c->username + "@" + c->hostname + " (" + c->publicIp + ")");
         }
+        this->connectionsMutex.unlock();
         if(connInfoStrings.size() == 0){
             connInfoStrings.push_back("No connections");
         }
@@ -202,11 +203,13 @@ public: // Also making everything public temporarily
 
     void update(){
         this->draw();
-        this->connectionsMutex.lock();
-        for(int i = 0; i < this->connections.size(); i++){
-            this->connections[i]->update();
+        if(this->DEBUG){ // If debugging is enabled, also draw the debug window for each connection
+            this->connectionsMutex.lock();
+            for(auto &c : this->connections){
+                c->drawDebugWindow();
+            }
+            this->connectionsMutex.unlock();
         }
-        this->connectionsMutex.unlock();
     }
 
     /*
@@ -216,21 +219,26 @@ public: // Also making everything public temporarily
     */
     void listenerThreadFunction(){
         while(true){
+            this->connectionsMutex.unlock();
+            // Dont allow more than 10 connections:
+            if(this->connections.size() >= 10){ // TODO: Make this a variable
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                continue;
+            }
+            // Set up the variables required to accept a new connection
             int newConnectionFd;
             struct sockaddr_in address;
             int addrlen = sizeof(address);
+            // Wait for a new connection
             if ((newConnectionFd = accept(this->serverListenerFd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) {
-                // If the error was too many open files, just ignore it :)
-                if(errno == EMFILE){
-                    continue;
-                }
                 perror_exit("server::listenerThreadFunction() - ERR: accept() failed");
             }
+            // Create a unique_ptr to a new connection object for the new connection
             std::unique_ptr<connection> newConnection = std::make_unique<connection>(newConnectionFd, address, addrlen);
+            // Verify the connection using the intialConnection() function (part of the connection class)
             if(!newConnection->intialConnection()){
-                continue;
+                continue; // If the connection failed, dont add it to the connections vector
             }
-            newConnection->drawDebugWindow = true; // Ill make a better way to do this later
             this->connectionsMutex.lock();
             // Move ownership of the connection to the connections vector
             this->connections.push_back(std::move(newConnection));
@@ -263,13 +271,21 @@ public: // Also making everything public temporarily
 
 
 int main() {
+    // Make all threads ignore SIGPIPE
+    // This is so that if a connection is closed, the program doesn't crash
+    signal(SIGPIPE, SIG_IGN);
+    sigset_t sigpipeMask;
+    sigemptyset(&sigpipeMask);
+    sigaddset(&sigpipeMask, SIGPIPE);
+    pthread_sigmask(SIG_BLOCK, &sigpipeMask, NULL);
+
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     auto screen = ImTui_ImplNcurses_Init(true);
     ImTui_ImplText_Init();
 
     server serverInstance(8080);
-    serverInstance.drawDebugWindow = true;
+    serverInstance.DEBUG = true;
     
     while (true) {
         ImTui_ImplNcurses_NewFrame();
