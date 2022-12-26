@@ -127,6 +127,7 @@ public: // Also making everything public temporarily
     unsigned int maxConnections; // Maximum number of connections to the server
     int selectedConnection = 0; // Index of the selected connection in the connections vector
     bool DEBUG = false;
+    unsigned long int n_conn = 0; // For debugging purposes
 
     /*
         Constructor - Sets up a socket to listen for new connections on and starts the listener thread
@@ -168,8 +169,14 @@ public: // Also making everything public temporarily
             ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
             ImGui::SetNextWindowSize(ImVec2(30, 4), ImGuiCond_Once);
             ImGui::Begin("Server Debug Window");
-            ImGui::Text("Number of connections: %d", this->connections.size());
+            ImGui::Text("Number of active connections: %d", this->connections.size());
+            ImGui::Text("Number of connections since start: %d", this->n_conn);
             ImGui::End();
+            this->connectionsMutex.lock();
+            for(auto &c : this->connections){
+                c->drawDebugWindow();
+            }
+            this->connectionsMutex.unlock();
         }
 
         // Draw the list of connections
@@ -203,17 +210,6 @@ public: // Also making everything public temporarily
         ImGui::End();
     }
 
-    void update(){
-        this->draw();
-        if(this->DEBUG){ // If debugging is enabled, also draw the debug window for each connection
-            this->connectionsMutex.lock();
-            for(auto &c : this->connections){
-                c->drawDebugWindow();
-            }
-            this->connectionsMutex.unlock();
-        }
-    }
-
     /*
         Function that the listener thread runs
         Places new connections into the connections vector, does nothing else.
@@ -235,6 +231,7 @@ public: // Also making everything public temporarily
             if ((newConnectionFd = accept(this->serverListenerFd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) {
                 perror_exit("server::listenerThreadFunction() - ERR: accept() failed");
             }
+            this->n_conn++;
             // Create a unique_ptr to a new connection object for the new connection
             std::unique_ptr<connection> newConnection = std::make_unique<connection>(newConnectionFd, address, addrlen);
             // Verify the connection using the intialConnection() function (part of the connection class)
@@ -259,6 +256,11 @@ public: // Also making everything public temporarily
             this->connectionsMutex.lock();
             // Iterate over every connection, delete it from the vector if connectivityCheck() returns false
             for(int i = 0; i < this->connections.size(); i++){
+                if(this->connections[i] == NULL){ // Might not actually fix anything
+                    this->connections.erase(this->connections.begin() + i);
+                    i--;
+                    continue;
+                }
                 if(!this->connections[i]->connectivityCheck()){
                     this->connections.erase(this->connections.begin() + i);
                     i--;
@@ -294,7 +296,7 @@ int main() {
         ImTui_ImplText_NewFrame();
         ImGui::NewFrame();
 
-        serverInstance.update();
+        serverInstance.draw();
 
         // Update and render
         ImGui::Render();
