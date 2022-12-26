@@ -124,13 +124,15 @@ public: // Also making everything public temporarily
     int opt = 1; // Used for setsockopt
     std::vector<std::unique_ptr<connection>> connections; // Vector of connections to the server
     std::mutex connectionsMutex; // Mutex for the connections vector
-    bool DEBUG = false;
+    unsigned int maxConnections; // Maximum number of connections to the server
     int selectedConnection = 0; // Index of the selected connection in the connections vector
+    bool DEBUG = false;
 
     /*
         Constructor - Sets up a socket to listen for new connections on and starts the listener thread
     */
-    server(unsigned int port){
+    server(unsigned int port = 8080, unsigned int maxConnections = 32){
+        this->maxConnections = maxConnections;
         // Creating the socket file descriptor
         if ((this->serverListenerFd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
             perror_exit("server::server() - ERR: socket() failed");
@@ -221,7 +223,7 @@ public: // Also making everything public temporarily
         while(true){
             this->connectionsMutex.unlock();
             // Dont allow more than 10 connections:
-            if(this->connections.size() >= 10){ // TODO: Make this a variable
+            if(this->connections.size() >= this->maxConnections){
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 continue;
             }
@@ -284,7 +286,7 @@ int main() {
     auto screen = ImTui_ImplNcurses_Init(true);
     ImTui_ImplText_Init();
 
-    server serverInstance(8080);
+    server serverInstance(8080, 256);
     serverInstance.DEBUG = true;
     
     while (true) {
