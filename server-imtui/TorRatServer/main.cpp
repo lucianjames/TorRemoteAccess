@@ -286,7 +286,7 @@ int main() {
     auto screen = ImTui_ImplNcurses_Init(true);
     ImTui_ImplText_Init();
 
-    server serverInstance(8080, 256);
+    server serverInstance(8080, 16);
     serverInstance.DEBUG = true;
     
     while (true) {
