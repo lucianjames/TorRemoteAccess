@@ -19,6 +19,7 @@ public: // Making everything public temporarily
     std::vector<std::string> plainTextMessageHistory;
     int selectedMessage = 0;
     char inputBuffer[1024] = {0};
+    const unsigned int inputBufferSize = 1024;
     std::string msgToSend = "";
 
     /*
@@ -58,7 +59,7 @@ public: // Making everything public temporarily
         ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
         ImGui::SetNextWindowSize(ImVec2(35, 10), ImGuiCond_Once);
         ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " terminal").c_str());
-        ImGui::BeginChild("Scrolling", ImVec2(0, -3), false);
+        ImGui::BeginChild("Scrolling", ImVec2(0, -2), false);
         for(auto m : this->plainTextMessageHistory){
             ImGui::TextWrapped("%s", m.c_str());
         }
@@ -67,8 +68,10 @@ public: // Making everything public temporarily
         }
         ImGui::EndChild();
         ImGui::Separator();
-        if(ImGui::InputText("Input", this->inputBuffer, 1024, ImGuiInputTextFlags_EnterReturnsTrue)){
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth());
+        if(ImGui::InputText("##Input", this->inputBuffer, this->inputBufferSize, ImGuiInputTextFlags_EnterReturnsTrue)){
             this->msgToSend = std::string(this->inputBuffer);
+            memset(this->inputBuffer, 0, this->inputBufferSize);
         }
         ImGui::End();
     }
