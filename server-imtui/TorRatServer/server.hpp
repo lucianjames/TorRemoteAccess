@@ -26,7 +26,7 @@ public: // Also making everything public temporarily
             perror_exit("server::server() - ERR: socket() failed");
         }
         
-        // Forcefully attaching socket to the port 8080
+        // Set up the socket options
         if (setsockopt(this->serverListenerFd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &this->opt, sizeof(this->opt))) {
             perror_exit("server::server() - ERR: setsockopt() failed");
         }
@@ -34,34 +34,37 @@ public: // Also making everything public temporarily
         this->address.sin_addr.s_addr = INADDR_ANY;
         this->address.sin_port = htons(port);
 
-        // Forcefully attaching socket to the port 8080
+        // Bind the socket to the address we just set up
         if (bind(this->serverListenerFd, (struct sockaddr *)&this->address, sizeof(this->address))<0) {
             perror_exit("server::server() - ERR: bind() failed");
         }
+
+        // Make the socket listen for connectoins
         if (listen(this->serverListenerFd, 3) < 0) { // 3 is the maximum number of pending connections, any more and the client will get a "Connection refused" error
             perror_exit("server::server() - ERR: listen() failed");
         }
 
-        // Starting the listener thread
+        // Start up the thread that listens for and sets up connections
         std::thread listenerThread(&server::listenerThreadFunction, this);
         listenerThread.detach(); // Detaching the thread so it doesn't need to be joined
 
-        // Starting the connectivity checking thread
+        // Start the thread which loops over every established connection (which doesnt have an active terminal) and checks if its still alive
         std::thread connectivityCheckThread(&server::connectivityCheckThreadFunction, this);
         connectivityCheckThread.detach();
     }
 
     void draw(){
-        if(this->DEBUG){
+        if(this->DEBUG){ // If debugging is enabled, draw a window which shows a little bit of info about the server
             ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
             ImGui::SetNextWindowSize(ImVec2(30, 4), ImGuiCond_Once);
             ImGui::Begin("Server Debug Window");
             ImGui::Text("Number of active connections: %d", this->connections.size());
             ImGui::Text("Number of connections since start: %d", this->n_conn);
             ImGui::End();
-            this->connectionsMutex.lock();
+            // Also, draw the debugging windows built into each connection:
+            this->connectionsMutex.lock(); // Lock the connections vector so no other thread can modify while debug windows are being drawn
             for(auto &c : this->connections){
-                c->drawDebugWindow();
+                c->drawDebugWindow(); // Draw each windows debug info window
             }
             this->connectionsMutex.unlock();
         }
@@ -72,40 +75,40 @@ public: // Also making everything public temporarily
         ImGui::Begin("Server Connections");
         // Have to make a vector of strings to pass to the ListBox function
         // Because it requires a pointer to the stuff to write onto the screen >:(
-        std::vector<std::string> connInfoStrings;
-        this->connectionsMutex.lock();
+        std::vector<std::string> connInfoStrings; // Creating this every single frame is not very efficient, but its not really a problem
+        this->connectionsMutex.lock(); // Make sure the connections arent being modified while the connInfoStrings are being assembled
         for(auto &c : this->connections){
-            connInfoStrings.push_back(c->username + "@" + c->hostname + " (" + c->publicIp + ")");
+            connInfoStrings.push_back(c->username + "@" + c->hostname + " (" + c->publicIp + ") on socket " + std::to_string(c->sockFd));
         }
         this->connectionsMutex.unlock();
         if(connInfoStrings.size() == 0){
-            connInfoStrings.push_back("No connections");
+            connInfoStrings.push_back("No connections"); // This prevents the listbox from looking weird when there are no connections
         }
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth());
         ImGui::ListBox("##Connections", 
                        &this->selectedConnection, 
                        [](void* data, int idx, const char** out_text){
-                            std::vector<std::string>* connInfoStrings = (std::vector<std::string>*)data;
-                            *out_text = connInfoStrings->at(idx).c_str();
+                            std::vector<std::string>* connInfoStrings = (std::vector<std::string>*)data; // Cast the void* to an std::vector<std::string>*
+                            *out_text = connInfoStrings->at(idx).c_str(); // Get a pointer to the string at the current index (idx)
                             return true;
                        },
-                       (void*)&connInfoStrings,
+                       (void*)&connInfoStrings, // This is the void* data variable of the lambda function
                        connInfoStrings.size(),
                        connInfoStrings.size()
-                       );
+        );
         ImGui::End();
     }
 
-    void update(){
-        this->connectionsMutex.lock();
-        for(int i=0; i<this->connections.size(); i++){
-            if(i != this->selectedConnection && this->connections[i]->terminalActive){
-                this->connections[i]->closeTerminal();
+    void update(){ // Called every frame
+        this->connectionsMutex.lock(); // Lock the connections vector so no other thread can modify it while we are updating
+        for(int i=0; i<this->connections.size(); i++){ // For every connection.....
+            if(this->connections[i]->terminalActive && this->selectedConnection != i){ // If a connection is active, but it isnt the currently selected terminal
+                this->connections[i]->closeTerminal(); // Do some cleanup, because its about to be moved back to the background
             }
-            this->connections[i]->terminalActive = (i==this->selectedConnection)?true:false;
-            this->connections[i]->update();
+            this->connections[i]->terminalActive = (i==this->selectedConnection)?true:false; // Set the terminalActive variable to true if the connection is currently selected in the UI
+            this->connections[i]->update(); // Update the connection
         }
-        this->connectionsMutex.unlock();
+        this->connectionsMutex.unlock(); // Other threads can have fun again :)
     }
 
     /*
@@ -114,31 +117,29 @@ public: // Also making everything public temporarily
         (Hopefully) thread safe via the connectionsMutex
     */
     void listenerThreadFunction(){
-        while(true){
-            this->connectionsMutex.unlock();
+        while(true){ // This thread goes until the program is closed
             // Dont allow more than 10 connections:
             if(this->connections.size() >= this->maxConnections){
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                continue;
+                std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Sleep for a bit to reduce CPU usage, helps prevent DOS kinda stuff from happening :)
+                continue; // Its been a whole 100ms, so lets go back to the top of the loop
             }
             // Set up the variables required to accept a new connection
-            int newConnectionFd;
+            int newConnectionFd; // The file descriptor for the new connection, will be set by accept() then used to instantiate a new connection object
             struct sockaddr_in address;
             int addrlen = sizeof(address);
             // Wait for a new connection
             if ((newConnectionFd = accept(this->serverListenerFd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) {
                 perror_exit("server::listenerThreadFunction() - ERR: accept() failed");
             }
-            this->n_conn++;
+            this->n_conn++; // Increment the variable used to keep track of the number of connections
             // Create a unique_ptr to a new connection object for the new connection
             std::unique_ptr<connection> newConnection = std::make_unique<connection>(newConnectionFd, address, addrlen);
             // Verify the connection using the intialConnection() function (part of the connection class)
             if(!newConnection->intialConnection()){
                 continue; // If the connection failed, dont add it to the connections vector
             }
-            this->connectionsMutex.lock();
-            // Move ownership of the connection to the connections vector
-            this->connections.push_back(std::move(newConnection));
+            this->connectionsMutex.lock(); // Make sure this thread is the only one using the connections vector
+            this->connections.push_back(std::move(newConnection)); // Move ownership of the unique_ptr<connection> to the connections vector
             this->connectionsMutex.unlock();
         }
     }
@@ -150,19 +151,20 @@ public: // Also making everything public temporarily
     */
     void connectivityCheckThreadFunction(){
         while(true){
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::this_thread::sleep_for(std::chrono::seconds(1)); // !!! should be a variable !!!
             this->connectionsMutex.lock();
             // Iterate over every connection, delete it from the vector if connectivityCheck() returns false
             for(int i = 0; i < this->connections.size(); i++){
-                if(this->connections[i] == NULL){ // Might not actually fix anything
+                // Under extreme stress-test conditions, the connections vector can contain NULL pointers (not sure how)
+                if(this->connections[i] == NULL){ // This is a hack to prevent a segfault
                     this->connections.erase(this->connections.begin() + i);
                     i--;
                     continue;
                 }
-                if(this->connections[i]->terminalActive){
+                if(this->connections[i]->terminalActive){ // Dont send a ping to the connection if its terminal is active
                     continue;
                 }
-                if(!this->connections[i]->connectivityCheck()){
+                if(!this->connections[i]->connectivityCheck()){ // If the connectivity check fails, delete the connection
                     this->connections.erase(this->connections.begin() + i);
                     i--;
                 }

