@@ -166,6 +166,9 @@ public: // Also making everything public temporarily
                 }
                 if(!this->connections[i]->connectivityCheck()){ // If the connectivity check fails, delete the connection
                     this->connections.erase(this->connections.begin() + i);
+                    if(this->selectedConnection > i){ // So we dont mess up whats currently selected in the UI
+                        this->selectedConnection--;
+                    }
                     i--;
                 }
             }
