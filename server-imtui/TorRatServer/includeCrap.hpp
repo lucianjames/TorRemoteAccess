@@ -18,4 +18,4 @@
 #include <fcntl.h>
 
 // Also this macro
-#define perror_exit(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
+#define perror_exit(msg) perror(msg); exit(EXIT_FAILURE);
