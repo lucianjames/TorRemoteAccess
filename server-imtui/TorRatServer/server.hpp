@@ -81,7 +81,7 @@ public: // Also making everything public temporarily
         if(connInfoStrings.size() == 0){
             connInfoStrings.push_back("No connections");
         }
-        ImGui::PushItemWidth(-1);
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth());
         ImGui::ListBox("##Connections", 
                        &this->selectedConnection, 
                        [](void* data, int idx, const char** out_text){
@@ -93,7 +93,6 @@ public: // Also making everything public temporarily
                        connInfoStrings.size(),
                        connInfoStrings.size()
                        );
-        ImGui::PopItemWidth();
         ImGui::End();
     }
 
