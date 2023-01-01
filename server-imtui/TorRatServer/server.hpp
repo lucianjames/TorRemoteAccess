@@ -15,6 +15,7 @@ public: // Also making everything public temporarily
     int selectedConnection = 0; // Index of the selected connection in the connections vector
     bool DEBUG = false;
     unsigned long int n_conn = 0; // For debugging purposes
+    unsigned int connectivityCheckIntervalSeconds = 5; // Interval between connectivity checks
 
     /*
         Constructor - Sets up a socket to listen for new connections on and starts the listener thread
@@ -151,7 +152,7 @@ public: // Also making everything public temporarily
     */
     void connectivityCheckThreadFunction(){
         while(true){
-            std::this_thread::sleep_for(std::chrono::seconds(1)); // !!! should be a variable !!!
+            std::this_thread::sleep_for(std::chrono::seconds(connectivityCheckIntervalSeconds));
             this->connectionsMutex.lock();
             // Iterate over every connection, delete it from the vector if connectivityCheck() returns false
             for(int i = 0; i < this->connections.size(); i++){
