@@ -94,6 +94,16 @@ public: // Making everything public temporarily
             this->parseSendCmd(this->msgToSend);
             this->msgToSend = "";
         }
+
+        // Read all the data from the socket
+        char buffer[1024] = {0};
+        int bytesReceived = 0;
+        int flags = fcntl(this->sockFd, F_GETFL, 0);
+        fcntl(this->sockFd, F_SETFL, flags | O_NONBLOCK);
+        do{
+            bytesReceived = recv(this->sockFd, buffer, 1024, 0);
+        }while(bytesReceived > 0);
+        fcntl(this->sockFd, F_SETFL, flags);
     }
 
     void closeTerminal(){ // Does a little cleanup, ! does not close the socket !
@@ -190,14 +200,15 @@ public: // Making everything public temporarily
     // - More are TODO, once basic functionality is done
 
     void parseSendCmd(std::string cmd){
+        this->plainTextMessageHistory.push_back("--> " + cmd);
         if(cmd == "pwd"){
             this->pwd();
         }
         else if(cmd == "ls"){
-            //this->ls();
+            this->ls();
         }
         else if(cmd.substr(0, 3) == "cd "){
-            //this->cd(cmd.substr(3));
+            this->cd(cmd.substr(3));
         }
         else{
             this->plainTextMessageHistory.push_back("Unknown command: " + cmd);
@@ -232,6 +243,61 @@ public: // Making everything public temporarily
         this->sockFdMutex.unlock(); // Command complete!
     }
 
+    void ls(){
+        // Send "ls;" to the client
+        this->sockFdMutex.lock();
+        int bytesSent = send(this->sockFd, "ls;", 3, 0);
+        if(bytesSent < 0){
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent));
+            this->sockFdMutex.unlock();
+            return;
+        }
+        // Receive the response from the client
+        char lsRecvBuffer[4096] = {0}; // Ideally this would be dynamic, will do later
+        int bytesReceived = recv(this->sockFd, lsRecvBuffer, 4096, 0);
+        if(bytesReceived < 0){
+            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+            this->sockFdMutex.unlock();
+            return;
+        }
+        std::string lsRecvBufferString = std::string(lsRecvBuffer); // Convert to a string for easier parsing
+        if(lsRecvBufferString.substr(0, 3) != "ls;"){
+            this->plainTextMessageHistory.push_back("ERR: Received bad response format");
+            this->sockFdMutex.unlock();
+            return;
+        }
+        lsRecvBufferString = lsRecvBufferString.substr(3);
+
+        // Display the files on the terminal
+        std::stringstream ss(lsRecvBufferString);
+        std::string f;
+        while(getline(ss, f, ';')){
+            this->plainTextMessageHistory.push_back(f);
+        }
+
+        this->sockFdMutex.unlock();
+    }
+
+    void cd(std::string path){
+        this->sockFdMutex.lock();
+        int bytesSent = send(this->sockFd, ("cd;" + path + ";").c_str(), path.length() + 4, 0);
+        if(bytesSent < 0){
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent));
+            this->sockFdMutex.unlock();
+            return;
+        }
+        // Receive the response from the client
+        char cdRecvBuffer[4096] = {0}; // Ideally this would be dynamic, will do later
+        int bytesReceived = recv(this->sockFd, cdRecvBuffer, 4096, 0);
+        if(bytesReceived < 0){
+            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+            this->sockFdMutex.unlock();
+            return;
+        }
+        std::string cdRecvBufferString = std::string(cdRecvBuffer); // Convert to a string for easier parsing
+        this->plainTextMessageHistory.push_back(cdRecvBufferString);
+        this->sockFdMutex.unlock();
+    }
 
 
 };
