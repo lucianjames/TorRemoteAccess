@@ -134,6 +134,7 @@
     <ClCompile Include="Source.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="clientClass.h" />
     <ClInclude Include="torExeRes.h" />
     <ClInclude Include="TorPlusPlus\torplusplus.hpp" />
   </ItemGroup>
