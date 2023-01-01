@@ -142,10 +142,9 @@ public:
     }
 
     void cd(std::string path){
-        std::string response = "cd;";
         std::wstring pathWStr(path.begin(), path.end() - 1);
         BOOL success = SetCurrentDirectory(pathWStr.c_str());
-        response += path + ((success) ? "success" : "failed");
+        std::string response = "cd;" + path + ((success) ? "success;" : "failed;");
         this->torSock.proxySendStr(response);
     }
     
