@@ -1,3 +1,6 @@
 [submodule "server-imtui/imtui"]
 	path = server-imtui/imtui
 	url = https://github.com/ggerganov/imtui
+[submodule "TRAClient/TRAClient/TorPlusPlus"]
+	path = TRAClient/TRAClient/TorPlusPlus
+	url = https://www.github.com/lj3d/TorPlusPlus
