@@ -80,10 +80,14 @@ int main() {
         char cmdBuff[1024] = { 0 };
         torSock.proxyRecv(cmdBuff, 1024);
         std::string cmd = cmdBuff;
+        printf("CMD: %s\n", cmd.c_str());
         if (cmd.starts_with("ping;")) {
             torSock.proxySend("ping;pong;", 10);
         }
-        printf("CMD: %s\n", cmd.c_str());
+        else {
+            torSock.proxySend("You sent me ", 12);
+            torSock.proxySend(cmd.c_str(), cmd.size());
+        }
     }
 
     return 0;
