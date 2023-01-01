@@ -21,9 +21,12 @@ public: // Making everything public temporarily
     const unsigned int inputBufferSize = 1024; // Size of the input buffer - could probably get rid of this dumb variable
     std::string msgToSend = ""; // This will be derived from the input buffer
 
+
     /*
-        Constructor
+        Constructor/destructor
     */
+
+   
     connection(int sockFd, struct sockaddr_in address, int addrlen){
        this->sockFd = sockFd;
        this->address = address; // !!! Not being used
@@ -35,6 +38,13 @@ public: // Making everything public temporarily
         close(this->sockFd);
         this->sockFdMutex.unlock();
     }
+
+
+
+    /*
+        Some GUI stuff
+    */
+
 
     void drawDebugWindow(){ // Draws some basic debug info to the screen
         ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
@@ -68,18 +78,12 @@ public: // Making everything public temporarily
         ImGui::End();
     }
 
-    // Send an std::string to the client
-    void sendMsgPlaintext(std::string msg){
-        this->sockFdMutex.lock();
-        int bytesSent = send(this->sockFd, msg.c_str(), msg.length(), 0);
-        this->sockFdMutex.unlock();
-        if(bytesSent < 0){
-            this->msgToSend = "Error sending message: " + std::to_string(bytesSent);
-            return;
-        }
-        this->plainTextMessageHistory.push_back("Sent: " + msg);
-        this->msgToSend = "";
-    }
+
+
+    /*
+        Update/close functions
+    */
+
 
     // Draws the window and sends messages
     void update(){
@@ -87,7 +91,8 @@ public: // Making everything public temporarily
             this->drawTerminalWindow();
         }
         if(this->msgToSend != ""){
-            this->sendMsgPlaintext(this->msgToSend);
+            this->parseSendCmd(this->msgToSend);
+            this->msgToSend = "";
         }
     }
 
@@ -104,6 +109,12 @@ public: // Making everything public temporarily
         }while(bytesReceived > 0);
         fcntl(this->sockFd, F_SETFL, flags);
     }
+
+
+    /*
+        Basic networking functionality
+    */
+
 
     // Send "ping" to the client, if the client does not respon with "ping;pong;", return false
     bool connectivityCheck(){
@@ -124,6 +135,19 @@ public: // Making everything public temporarily
         this->sockFdMutex.unlock();
         this->lastConnectivityCheck = true;
         return true;
+    }
+
+    // Send an std::string to the client. Mostly for testing
+    void sendMsgPlaintext(std::string msg){
+        this->sockFdMutex.lock();
+        int bytesSent = send(this->sockFd, msg.c_str(), msg.length(), 0);
+        this->sockFdMutex.unlock();
+        if(bytesSent < 0){
+            this->msgToSend = "Error sending message: " + std::to_string(bytesSent);
+            return;
+        }
+        this->plainTextMessageHistory.push_back("Sent: " + msg);
+        this->msgToSend = "";
     }
 
     // Gets some information from the client and returns true if successful
@@ -152,4 +176,62 @@ public: // Making everything public temporarily
         this->sockFdMutex.unlock();
         return true; // TODO: Properly verify the data received is valid
     }
+
+
+
+    /*
+        Command handling code
+    */
+
+    // Available commands (designed for the user):
+    // - pwd - sends as "pwd;" - receives response as "pwd;<path>;"
+    // - ls - sends as "ls;" - receives response as "ls;<file1>;<file2>;<file3>;"
+    // - cd <path> - sends as "cd;<path>;" - receives success as "cd;<path>;" or failure as "cd;error;"
+    // - More are TODO, once basic functionality is done
+
+    void parseSendCmd(std::string cmd){
+        if(cmd == "pwd"){
+            this->pwd();
+        }
+        else if(cmd == "ls"){
+            //this->ls();
+        }
+        else if(cmd.substr(0, 3) == "cd "){
+            //this->cd(cmd.substr(3));
+        }
+        else{
+            this->plainTextMessageHistory.push_back("Unknown command: " + cmd);
+        }
+    }
+
+    void pwd(){
+        // Send "pwd;" to the client
+        this->sockFdMutex.lock(); // Lock the socket until this command is done
+        int bytesSent = send(this->sockFd, "pwd;", 4, 0);
+        if(bytesSent < 0){
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent));
+            this->sockFdMutex.unlock();
+            return;
+        }
+        // Receive the response from the client
+        char pwdRecvBuffer[4096] = {0}; // Big enough for even the longest path on linux! (windows is a puny 260 characters max lol)
+        int bytesReceived = recv(this->sockFd, pwdRecvBuffer, 4096, 0); // Blocking call - maybe figure out a way to prevent issues with this?
+        if(bytesReceived < 0){
+            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+            this->sockFdMutex.unlock();
+            return;
+        }
+        std::string pwdRecvBufferString = std::string(pwdRecvBuffer); // Convert to a string for easier parsing
+        if(pwdRecvBufferString.substr(0, 4) != "pwd;"){
+            this->plainTextMessageHistory.push_back("ERR: Received bad response format");
+            this->sockFdMutex.unlock();
+            return;
+        }
+        pwdRecvBufferString = pwdRecvBufferString.substr(4);
+        this->plainTextMessageHistory.push_back(pwdRecvBufferString);
+        this->sockFdMutex.unlock(); // Command complete!
+    }
+
+
+
 };

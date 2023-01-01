@@ -20,7 +20,7 @@ int main() {
 
     // Server setup (see server.hpp)
     server serverInstance(serverPort, 16);
-    serverInstance.DEBUG = true;
+    serverInstance.DEBUG = false;
     
     while (true) {
         // Start the frame
