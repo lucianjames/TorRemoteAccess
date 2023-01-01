@@ -26,6 +26,9 @@
     <ClInclude Include="TorPlusPlus\torplusplus.hpp">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="clientClass.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="TRAClient.rc">
