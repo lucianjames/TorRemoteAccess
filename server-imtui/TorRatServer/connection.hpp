@@ -330,7 +330,7 @@ public: // Making everything public temporarily
             this->sockFdMutex.unlock();
             return;
         }
-        unsigned long long int fileSize = std::stoi(grabRecvBufferString.substr(5+path.size()+1)); // unsafe
+        unsigned long long int fileSize = std::stoi(grabRecvBufferString.substr(5+path.size()+1)); // !!! unsafe as fuck :( 
         unsigned int headerSize = 5+path.size()+1+std::to_string(fileSize).size()+1; // The size of the "grab;[path];[file size];" thingy :D
         bytesReceivedTotal = bytesReceived - headerSize;
 
@@ -351,7 +351,7 @@ public: // Making everything public temporarily
 
         // Write the file data to disk
         this->plainTextMessageHistory.push_back("Recieved " + std::to_string(bytesReceivedTotal) + " bytes of data");
-        std::ofstream of("./" + path, std::ios::binary); // !!!! unsanitized path, user stupidity could to overwriting files
+        std::ofstream of("./" + path, std::ios::binary); // !!!! unsanitized path, user stupidity could lead to overwriting files
         of.write(fileData.data(), fileData.size());
         of.close();
         this->plainTextMessageHistory.push_back("File written to disk at ./" + path);
