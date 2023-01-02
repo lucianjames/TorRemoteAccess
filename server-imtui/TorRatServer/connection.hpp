@@ -331,7 +331,7 @@ public: // Making everything public temporarily
             return;
         }
         unsigned long long int fileSize = std::stoi(grabRecvBufferString.substr(5+path.size()+1)); // unsafe
-        bytesReceivedTotal = bytesReceived-5-path.size()-1;
+        bytesReceivedTotal = bytesReceived-5-path.size()-1-std::to_string(fileSize).size()-1; // disgusting
         // Now that we know the file size, we can read the file data
         std::vector<char> fileData;
         fileData.reserve(fileSize);
