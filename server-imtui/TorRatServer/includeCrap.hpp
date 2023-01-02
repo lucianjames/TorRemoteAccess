@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <sstream>
+#include <fstream>
 
 // Also this macro
 #define perror_exit(msg) perror(msg); exit(EXIT_FAILURE);
