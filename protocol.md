@@ -76,15 +76,15 @@ grab;<remotepath>;
 ```
 The client responds with the following message (upon success):
 ```
-grab;<remotepath>;<raw bytes>;
+grab;<remotepath>;<file size>;<raw bytes>;
 ```
-The server will then handle the raw bytes as it sees fit.
+Failure will send a file size of 0
 Failure will send a generic failure message
 ### `upload <localpath> <remotepath>`
 This command will upload a file from the specified local path to the specified remote path on the client.
 The format of this command from the server to the client is as follows:
 ```
-upload;<remotepath>;<raw bytes>;
+upload;<remotepath>;<file size>;<raw bytes>;
 ```
 The client responds with the following message (upon success):
 ```
