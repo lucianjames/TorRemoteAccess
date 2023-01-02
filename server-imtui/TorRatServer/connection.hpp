@@ -331,13 +331,13 @@ public: // Making everything public temporarily
             return;
         }
         unsigned long long int fileSize = std::stoi(grabRecvBufferString.substr(5+path.size()+1)); // unsafe
-        bytesReceivedTotal = bytesReceived-5-path.size()-1-std::to_string(fileSize).size()-1; // disgusting
-        // Now that we know the file size, we can read the file data
+        unsigned int headerSize = 5+path.size()+1+std::to_string(fileSize).size()+1; // The size of the "grab;[path];[file size];" thingy :D
+        bytesReceivedTotal = bytesReceived - headerSize;
+
+        // Now that we know the file size, we can read the file data into an std::vector<char>
         std::vector<char> fileData;
         fileData.reserve(fileSize);
-        for(unsigned int i = 0; i < bytesReceivedTotal; i++){
-            fileData.push_back(grabRecvBuffer[i+5+path.size()+1+std::to_string(fileSize).size()+1]); // disgusting
-        }
+        fileData.insert(fileData.end(), grabRecvBuffer+headerSize, grabRecvBuffer+bytesReceived);
         while(bytesReceivedTotal < fileSize){
             bytesReceived = recv(this->sockFd, grabRecvBuffer, 4096, 0);
             if(bytesReceived < 0){
@@ -345,9 +345,7 @@ public: // Making everything public temporarily
                 this->sockFdMutex.unlock();
                 return;
             }
-            for(unsigned int i = 0; i < bytesReceived; i++){
-                fileData.push_back(grabRecvBuffer[i]);
-            }
+            fileData.insert(fileData.end(), grabRecvBuffer, grabRecvBuffer+bytesReceived);
             bytesReceivedTotal += bytesReceived;
         }
         // Now that we have the file data, we can write it to a file
