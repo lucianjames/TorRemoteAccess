@@ -304,17 +304,16 @@ public: // Making everything public temporarily
 
     void grab(std::string path){
         this->sockFdMutex.lock();
+
+        // Send the grab command to the client
         int bytesSent = send(this->sockFd, ("grab;" + path + ";").c_str(), path.length() + 6, 0);
         if(bytesSent < 0){
             this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent));
             this->sockFdMutex.unlock();
             return;
         }
-        // Receive the response from the client
-        // Unlike the previous commands, this one needs to receive an std::vector<char>
-        // The format for the received data is:
-        // "grab;[path];[file size];[file data]"
-        // First, read the file size so we known how much data to read
+
+        // Receive 4096 bytes from the client - this will include the file size and the first chunk of the file (or all of it if it's smaller than 4096 bytes)
         char grabRecvBuffer[4096] = {0};
         unsigned long long int bytesReceivedTotal = 0;
         int bytesReceived = recv(this->sockFd, grabRecvBuffer, 4096, 0);
@@ -323,6 +322,7 @@ public: // Making everything public temporarily
             this->sockFdMutex.unlock();
             return;
         }
+
         // Parse the response to get the file size
         std::string grabRecvBufferString = std::string(grabRecvBuffer); // Cant use this string for any of the file data, because null terminated :(
         if(grabRecvBufferString.substr(0, 5+path.size()+1) != "grab;" + path + ";" || grabRecvBufferString[5+path.size()+2] == '0'){
@@ -334,7 +334,7 @@ public: // Making everything public temporarily
         unsigned int headerSize = 5+path.size()+1+std::to_string(fileSize).size()+1; // The size of the "grab;[path];[file size];" thingy :D
         bytesReceivedTotal = bytesReceived - headerSize;
 
-        // Now that we know the file size, we can read the file data into an std::vector<char>
+        // Read the file data into an std::vector<char>, receive more data from the socket if the fileSize is greater than what has been received so far
         std::vector<char> fileData;
         fileData.reserve(fileSize);
         fileData.insert(fileData.end(), grabRecvBuffer+headerSize, grabRecvBuffer+bytesReceived);
@@ -348,9 +348,10 @@ public: // Making everything public temporarily
             fileData.insert(fileData.end(), grabRecvBuffer, grabRecvBuffer+bytesReceived);
             bytesReceivedTotal += bytesReceived;
         }
-        // Now that we have the file data, we can write it to a file
+
+        // Write the file data to disk
         this->plainTextMessageHistory.push_back("Recieved " + std::to_string(bytesReceivedTotal) + " bytes of data");
-        std::ofstream of("./" + path, std::ios::binary);
+        std::ofstream of("./" + path, std::ios::binary); // !!!! unsanitized path, user stupidity could to overwriting files
         of.write(fileData.data(), fileData.size());
         of.close();
         this->plainTextMessageHistory.push_back("File written to disk at ./" + path);
