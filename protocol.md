@@ -7,15 +7,21 @@ Response:
 
 ## ls
 Sends as:
-`ls`
+`ls;`
 Response:
 `ls;<file/folder/>;<file/folder/>;...;`
+
+## rm
+Sends as:
+`rm;<path>;`
+Response:
+`rm;<path>;success;` OR `rm;<path>;failed;`
 
 ## cd
 Sends as:
 `cd;dir;`
 Response:
-`cd;success` OR `cd;failed`
+`cd;success;` OR `cd;failed;`
 
 ## grab
 Sends as:
@@ -23,7 +29,7 @@ Sends as:
 Response:
 `grab;<path>;<filesize>;<raw file data>;`
 
-## upload:
+## upload
 Sends as:
 `upload;<filename>;<filesize>;<raw file data>;`
 Response:
