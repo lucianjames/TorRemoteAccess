@@ -201,22 +201,22 @@ public: // Making everything public temporarily
 
     void parseSendCmd(std::string cmd){
         this->plainTextMessageHistory.push_back("--> " + cmd);
-        if(cmd == "pwd"){
+        if(cmd.starts_with("pwd")){
             this->pwd();
         }
-        else if(cmd == "ls"){
+        else if(cmd.starts_with("ls")){
             this->ls();
         }
-        else if(cmd.substr(0, 3) == "cd "){
+        else if(cmd.starts_with("cd ")){
             this->cd(cmd.substr(3));
         }
-        else if(cmd.substr(0, 5) == "grab "){
+        else if(cmd.starts_with("grab ")){
             this->grab(cmd.substr(5));
         }
-        else if(cmd.substr(0, 7) == "upload "){
+        else if(cmd.starts_with("upload ")){
             this->upload(cmd.substr(7));
         }
-        else if(cmd.substr(0, 5) == "exec "){
+        else if(cmd.starts_with("exec ")){
             this->exec(cmd.substr(5));
         }
         else{
