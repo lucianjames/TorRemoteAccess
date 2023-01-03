@@ -80,15 +80,15 @@ grab;<remotepath>;<file size>;<raw bytes>;
 ```
 Failure will send a file size of 0
 Failure will send a generic failure message
-### `upload <localpath> <remotepath>`
-This command will upload a file from the specified local path to the specified remote path on the client.
+### `upload <localpath>`
+This command will upload a file from the specified local path to the current working directory of the client.
 The format of this command from the server to the client is as follows:
 ```
-upload;<remotepath>;<file size>;<raw bytes>;
+upload;<file name>;<file size>;<raw bytes>;
 ```
 The client responds with the following message (upon success):
 ```
-upload;<remotepath>;success;
+upload;<filename>;success;
 ```
 Failure will send a generic failure message
 ### `exec <command>`
