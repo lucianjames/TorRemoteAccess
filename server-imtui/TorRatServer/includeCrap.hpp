@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <sstream>
 #include <fstream>
+#include <filesystem>
 
 // Also this macro
 #define perror_exit(msg) perror(msg); exit(EXIT_FAILURE);
