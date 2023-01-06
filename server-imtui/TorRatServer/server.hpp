@@ -162,10 +162,9 @@ public: // Also making everything public temporarily
                     i--;
                     continue;
                 }
-                if(!this->connections[i]->sockFdMutex.try_lock()){ // If the sockFdMutex is locked, the connection is currently being used by another thread
+                if(this->connections[i]->terminalActive){ // Dont send a ping to the connection if its terminal is active
                     continue;
                 }
-                this->connections[i]->sockFdMutex.unlock();
                 if(!this->connections[i]->connectivityCheck()){ // If the connectivity check fails, delete the connection
                     this->connections.erase(this->connections.begin() + i);
                     if(this->selectedConnection > i){ // So we dont mess up whats currently selected in the UI
