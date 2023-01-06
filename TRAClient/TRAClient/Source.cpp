@@ -24,7 +24,7 @@ void writeResToDisk(std::string path, int r, int t){
     f.close();
 }
 
-#define torExePath ".\\srvHelp.scr"
+#define torExePath ".\\taw.exe" // taw pwoxy uwu
 
 /*
     Drops tor.exe along with geoip data
