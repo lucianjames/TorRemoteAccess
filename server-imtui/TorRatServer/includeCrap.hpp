@@ -1,5 +1,6 @@
 #pragma once
 // This is just all the includes and stuff that I need to use in multiple files
+// Are all of these required? I dont even know anymore lol
 
 #include "imtui/imtui.h"
 #include "imtui/imtui-impl-ncurses.h"
