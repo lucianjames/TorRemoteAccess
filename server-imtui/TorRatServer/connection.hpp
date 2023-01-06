@@ -58,8 +58,11 @@ public: // Making everything public temporarily
     }
 
     void drawTerminalWindow(){ // Draws a listbox with the message history, and an inputbox for sending messages
-        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
-        ImGui::SetNextWindowSize(ImVec2(35, 10), ImGuiCond_Once);
+        unsigned int windowWidth = 50;
+        unsigned int windowHeight = 25;
+        // Put the window in the middle of the screen
+        ImGui::SetNextWindowPos(ImVec2((ImGui::GetIO().DisplaySize.x/2)-(windowWidth/2), (ImGui::GetIO().DisplaySize.y/2)-(windowHeight/2)), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight), ImGuiCond_Once);
         ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " terminal").c_str());
         ImGui::BeginChild("Scrolling", ImVec2(0, -2), false);
         for(auto m : this->plainTextMessageHistory){
@@ -231,7 +234,7 @@ public: // Making everything public temporarily
         this->sockFdMutex.lock(); // Lock the socket until this command is done
         int bytesSent = send(this->sockFd, "pwd;", 4, 0);
         if(bytesSent < 0){
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent));
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)");
             this->sockFdMutex.unlock();
             return;
         }
@@ -259,7 +262,7 @@ public: // Making everything public temporarily
         this->sockFdMutex.lock();
         int bytesSent = send(this->sockFd, "ls;", 3, 0);
         if(bytesSent < 0){
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent));
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)");
             this->sockFdMutex.unlock();
             return;
         }
@@ -293,7 +296,7 @@ public: // Making everything public temporarily
         this->sockFdMutex.lock();
         int bytesSent = send(this->sockFd, ("cd;" + path + ";").c_str(), path.length() + 4, 0);
         if(bytesSent < 0){
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent));
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)");
             this->sockFdMutex.unlock();
             return;
         }
@@ -316,7 +319,7 @@ public: // Making everything public temporarily
         // Send the grab command to the client
         int bytesSent = send(this->sockFd, ("grab;" + path + ";").c_str(), path.length() + 6, 0);
         if(bytesSent < 0){
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent));
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)");
             this->sockFdMutex.unlock();
             return;
         }
@@ -380,7 +383,7 @@ public: // Making everything public temporarily
             f.close();
             int bytesSent = send(this->sockFd, uploadData.data(), uploadData.size(), 0);
             if(bytesSent < 0){
-                this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent));
+                this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)");
                 this->sockFdMutex.unlock();
                 return;
             }
@@ -401,7 +404,7 @@ public: // Making everything public temporarily
         this->sockFdMutex.lock();
         int bytesSent = send(this->sockFd, ("exec;" + cmd + ";").c_str(), cmd.length() + 6, 0);
         if(bytesSent < 0){
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent));
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)");
             this->sockFdMutex.unlock();
             return;
         }
