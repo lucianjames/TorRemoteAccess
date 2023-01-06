@@ -95,7 +95,8 @@ public: // Making everything public temporarily
             this->msgToSend = "";
         }
 
-        // Read all the data from the socket
+        // Read all the data from the socket (flush it basically)
+        this->sockFdMutex.lock();
         char buffer[1024] = {0};
         int bytesReceived = 0;
         int flags = fcntl(this->sockFd, F_GETFL, 0);
@@ -104,6 +105,7 @@ public: // Making everything public temporarily
             bytesReceived = recv(this->sockFd, buffer, 1024, 0);
         }while(bytesReceived > 0);
         fcntl(this->sockFd, F_SETFL, flags);
+        this->sockFdMutex.unlock();
     }
 
     void closeTerminal(){ // Does a little cleanup, ! does not close the socket !
