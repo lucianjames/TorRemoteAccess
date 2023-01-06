@@ -1,7 +1,7 @@
 #include "includeCrap.hpp"
 #include "server.hpp"
 
-#define serverPort 8080
+#define serverPort 52727
 
 int main() {
     // Make all threads ignore SIGPIPE
@@ -15,7 +15,7 @@ int main() {
     // ImTui setup:
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    auto screen = ImTui_ImplNcurses_Init(true);
+    ImTui::TScreen* screen = ImTui_ImplNcurses_Init(true);
     ImTui_ImplText_Init();
 
     // Server setup (see server.hpp)
