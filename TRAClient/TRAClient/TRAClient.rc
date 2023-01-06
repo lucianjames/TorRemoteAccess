@@ -1,3 +1,5 @@
 #include "torExeRes.h"
 
 TOREXE EXEFILE "resources\\tor.exe"
+GEOIP TEXTFILE "resources\\data\\geoip"
+GEOIP6 TEXTFILE "resources\\data\\geoip6"

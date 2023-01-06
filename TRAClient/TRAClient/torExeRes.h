@@ -14,4 +14,9 @@
 #endif
 
 #define EXEFILE 265
-#define TOREXE 266
+#define TEXTFILE 266
+
+#define TOREXE 365
+#define GEOIP 366
+#define GEOIP6 367
+
