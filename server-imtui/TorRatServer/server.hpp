@@ -70,9 +70,11 @@ public: // Also making everything public temporarily
             this->connectionsMutex.unlock();
         }
 
-        // Draw the list of connections
-        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
-        ImGui::SetNextWindowSize(ImVec2(30,ImGui::GetIO().DisplaySize.y/2), ImGuiCond_Once);
+        // Draw the list of connections window
+        unsigned int ConnListWindowWidth = 100;
+        unsigned int ConnListWindowHeight = 10;
+        ImGui::SetNextWindowPos(ImVec2((ImGui::GetIO().DisplaySize.x/2)-(ConnListWindowWidth/2), 0), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(ConnListWindowWidth, ConnListWindowHeight), ImGuiCond_Once);
         ImGui::Begin("Server Connections");
         // Have to make a vector of strings to pass to the ListBox function
         // Because it requires a pointer to the stuff to write onto the screen >:(
