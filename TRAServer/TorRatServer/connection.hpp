@@ -445,6 +445,7 @@ public: // Making everything public temporarily
     }
 
     void exec(std::string cmd){
+        // Yeah ill comment this code later, im tired
         this->sockFdMutex.lock();
         int bytesSent = send(this->sockFd, ("exec;" + cmd + ";").c_str(), cmd.length() + 6, 0);
         if(bytesSent < 0){
@@ -452,14 +453,38 @@ public: // Making everything public temporarily
             this->sockFdMutex.unlock();
             return;
         }
-        char responseBuffer[4096] = {0}; // This is a stupid hard limit for now
-        int bytesReceived = recv(this->sockFd, responseBuffer, 4096, 0);
+        char responseBuffer[1024] = {0};
+        int bytesReceived = recv(this->sockFd, responseBuffer, 1024, 0);
         if(bytesReceived < 0){
             this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
             this->sockFdMutex.unlock();
             return;
         }
-        this->plainTextMessageHistory.push_back("Response: " + std::string(responseBuffer));
+        std::string responseBufferString = std::string(responseBuffer);
+        if(responseBufferString.substr(0, 5+cmd.size()) != "exec;" + cmd + ";"){
+            this->plainTextMessageHistory.push_back("ERR: Received bad response format");
+            this->sockFdMutex.unlock();
+            return;
+        }
+        unsigned long long int responseSize = std::stoi(responseBufferString.substr(5+cmd.size())); // Unsafe poopoo code
+        unsigned int headerSize = 5+cmd.size()+1+std::to_string(responseSize).size(); // The size of "exec;[cmd];[response size];"
+        unsigned long long int bytesReceivedTotal = bytesReceived - headerSize;
+        std::vector<char> response;
+        response.reserve(responseSize);
+        response.insert(response.end(), responseBufferString.begin()+headerSize, responseBufferString.end());
+        while(bytesReceivedTotal < responseSize){
+            bytesReceived = recv(this->sockFd, responseBuffer, 1024, 0);
+            if(bytesReceived < 0){
+                this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+                this->sockFdMutex.unlock();
+                return;
+            }
+            response.insert(response.end(), responseBuffer, responseBuffer+bytesReceived);
+            bytesReceivedTotal += bytesReceived;
+        }
+        this->plainTextMessageHistory.push_back("=== exec() response ===");
+        this->plainTextMessageHistory.push_back(std::string(response.begin(), response.end()-1));
+        this->plainTextMessageHistory.push_back("=== exec() response ===");
         this->sockFdMutex.unlock();
     }
 
