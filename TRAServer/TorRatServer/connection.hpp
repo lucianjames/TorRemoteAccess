@@ -69,7 +69,7 @@ private:
             this->genericCmd("pwd;");
         }
         else if(cmd.starts_with("ls")){
-            this->ls();
+            this->exec("dir");
         }
         else if(cmd.starts_with("cd ")){
             this->genericCmd("cd;" + cmd.substr(3) + ";");
@@ -143,69 +143,6 @@ private:
             this->plainTextMessageHistory.push_back("WARN: Received an unexpected response from the client");
         }
         this->plainTextMessageHistory.push_back(cmdRecvBufferString.substr(cmd.length(), cmdRecvBufferString.length() - cmd.length() - 1)); // Extract just the <response> from "<cmd>;<response>;"
-        this->sockFdMutex.unlock();
-    }
-
-
-    /*
-        Lists the files and folders in the current working directory
-        The client appends a "/" to the end of directories
-        ls() cant be a genericCmd() because the response is a list which needs to be parsed
-        The response from the client is a list of files and folders separated by newlines using the following format:
-        "ls;<response size>;<file1>;<file2>;...;<fileN>"
-
-        !!!!! NOTE !!!!!
-        This function currently has a hardcoded buffer size of 4096 bytes. This is not ideal and will be fixed later.
-    */
-    void ls(){
-        this->sockFdMutex.lock();
-
-        // Send "ls;" to the client:
-        int bytesSent = send(this->sockFd, "ls;", 3, 0);
-        if(bytesSent < 0){
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)");
-            this->sockFdMutex.unlock();
-            return;
-        }
-
-        // Receive the response from the client:
-        char lsRecvBuffer[4096] = {0}; // !!! fixed size, any information past 4096 bytes will be lost
-        int bytesReceived = recv(this->sockFd, lsRecvBuffer, 4096, 0);
-        if(bytesReceived < 0){
-            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
-            this->sockFdMutex.unlock();
-            return;
-        }
-
-        // Parse the response size from the response:
-        std::string lsRecvBufferString = std::string(lsRecvBuffer); // Convert to a string for easier parsing
-        if(lsRecvBufferString.substr(0, 3) != "ls;"){
-            this->plainTextMessageHistory.push_back("ERR: Received bad response format");
-            this->sockFdMutex.unlock();
-            return;
-        }
-        lsRecvBufferString = lsRecvBufferString.substr(3); // Remove the "ls;" from the start of the string
-        unsigned long long int responseSize = std::stoull(lsRecvBufferString.substr(0, lsRecvBufferString.find(';'))); // Extract the response size from the response
-        lsRecvBufferString = lsRecvBufferString.substr(lsRecvBufferString.find(';')); // Remove the response size from the start of the string
-
-        // Receive the rest of the response (if it is larger than 4096 bytes):
-        while(lsRecvBufferString.length() < responseSize){
-            bytesReceived = recv(this->sockFd, lsRecvBuffer, 4096, 0);
-            if(bytesReceived < 0){
-                this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
-                this->sockFdMutex.unlock();
-                return;
-            }
-            lsRecvBufferString += std::string(lsRecvBuffer);
-        }
-
-        // Parse each file/folder from the response and append it to the message history:
-        std::stringstream ss(lsRecvBufferString); // Create a stringstream so that getline() can be used to go through the string one token at a time based on the delimiter ";"
-        std::string f;
-        while(getline(ss, f, ';')){
-            this->plainTextMessageHistory.push_back(f); // The delimiter is removed from the string by getline(), so we can just push_back() f without any modifications
-        }
-
         this->sockFdMutex.unlock();
     }
 
