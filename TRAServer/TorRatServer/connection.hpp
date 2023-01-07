@@ -79,6 +79,10 @@ public: // Making everything public temporarily
             this->msgToSend = std::string(this->inputBuffer);
             memset(this->inputBuffer, 0, this->inputBufferSize);
         }
+        // Set the keyboard focus to the input box
+        if(!ImGui::IsAnyItemActive() && !ImGui::IsMouseClicked(0)){
+            ImGui::SetKeyboardFocusHere();
+        }
         ImGui::End();
     }
 
