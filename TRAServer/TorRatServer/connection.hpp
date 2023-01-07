@@ -71,6 +71,9 @@ private:
         else if(cmd.starts_with("ls")){
             this->exec("dir");
         }
+        else if(cmd.starts_with("dir")){
+            this->exec("dir");
+        }
         else if(cmd.starts_with("cd ")){
             this->genericCmd("cd;" + cmd.substr(3) + ";");
         }
