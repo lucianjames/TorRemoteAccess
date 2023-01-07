@@ -380,8 +380,10 @@ public: // Making everything public temporarily
 
         // Parse the response to get the file size
         std::string grabRecvBufferString = std::string(grabRecvBuffer); // Cant use this string for any of the file data, because null terminated :(
-        if(grabRecvBufferString.substr(0, 5+path.size()+1) != "grab;" + path + ";" || grabRecvBufferString[5+path.size()+2] == '0'){
+        if(grabRecvBufferString.substr(0, 5+path.size()+1) != "grab;" + path + ";" || grabRecvBufferString[5+path.size()+1] == '0'){
             this->plainTextMessageHistory.push_back("ERR: Received bad response format or file not found");
+            this->plainTextMessageHistory.push_back(grabRecvBufferString);
+            this->plainTextMessageHistory.push_back("grab;" + path + ";");
             this->sockFdMutex.unlock();
             return;
         }
