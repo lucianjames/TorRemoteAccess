@@ -215,6 +215,9 @@ public: // Making everything public temporarily
         if(cmd.starts_with("help")){
             this->help();
         }
+        else if(cmd.starts_with("clear")){
+            this->plainTextMessageHistory.clear();
+        }
         else if(cmd.starts_with("pwd")){
             this->pwd();
         }
@@ -247,6 +250,7 @@ public: // Making everything public temporarily
     void help(){
         this->plainTextMessageHistory.push_back("= Available commands:");
         this->plainTextMessageHistory.push_back("== help - Displays this help message");
+        this->plainTextMessageHistory.push_back("== clear - Clears the message history");
         this->plainTextMessageHistory.push_back("== pwd - Displays the current working directory");
         this->plainTextMessageHistory.push_back("== ls - Lists the files in the current working directory");
         this->plainTextMessageHistory.push_back("== cd <path> - Changes the current working directory to <path>");
