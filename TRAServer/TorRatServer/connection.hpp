@@ -461,13 +461,26 @@ public: // Making everything public temporarily
             return;
         }
         std::string responseBufferString = std::string(responseBuffer);
-        if(responseBufferString.substr(0, 5+cmd.size()) != "exec;" + cmd + ";"){
+        if(responseBufferString.substr(0, 6+cmd.size()) != "exec;" + cmd + ";"){
             this->plainTextMessageHistory.push_back("ERR: Received bad response format");
+            this->plainTextMessageHistory.push_back(responseBufferString);
             this->sockFdMutex.unlock();
             return;
         }
-        unsigned long long int responseSize = std::stoi(responseBufferString.substr(5+cmd.size())); // Unsafe poopoo code
-        unsigned int headerSize = 5+cmd.size()+1+std::to_string(responseSize).size(); // The size of "exec;[cmd];[response size];"
+
+        // Fuck it, messy disgusting error handling
+        unsigned long long int responseSize;
+        try{
+            responseSize = std::stoi(responseBufferString.substr(6+cmd.size())); // Unsafe poopoo code
+        }catch(std::exception& e){
+            this->plainTextMessageHistory.push_back("ERR: stoi(): " + std::string(e.what()));
+            this->plainTextMessageHistory.push_back(responseBufferString);
+            this->plainTextMessageHistory.push_back("Response size: " + std::to_string(responseBufferString.size()));
+            this->sockFdMutex.unlock();
+            return;
+        }
+
+        unsigned int headerSize = 6+cmd.size()+1+std::to_string(responseSize).size(); // The size of "exec;[cmd];[response size];"
         unsigned long long int bytesReceivedTotal = bytesReceived - headerSize;
         std::vector<char> response;
         response.reserve(responseSize);
