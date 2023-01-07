@@ -136,7 +136,7 @@ public: // Also making everything public temporarily
             }
             this->n_conn++; // Increment the variable used to keep track of the number of connections
             // Create a unique_ptr to a new connection object for the new connection
-            std::unique_ptr<connection> newConnection = std::make_unique<connection>(newConnectionFd, address, addrlen);
+            std::unique_ptr<connection> newConnection = std::make_unique<connection>(newConnectionFd);
             // Verify the connection using the intialConnection() function (part of the connection class)
             if(!newConnection->intialConnection()){
                 continue; // If the connection failed, dont add it to the connections vector
