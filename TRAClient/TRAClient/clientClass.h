@@ -228,7 +228,7 @@ public:
     }
 
     void mkdir(std::string path) {
-        this->torSock.proxySendStr("mkdir;" + path + ((std::filesystem::create_directories(path)) ? "/;success;" : ";failed;"));
+        this->torSock.proxySendStr("mkdir;" + path + ((std::filesystem::create_directories(path)) ? ";success;" : ";failed;"));
     }
 
     /*
