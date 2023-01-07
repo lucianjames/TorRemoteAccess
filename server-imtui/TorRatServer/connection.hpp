@@ -22,6 +22,7 @@ public: // Making everything public temporarily
     std::string msgToSend = ""; // This will be derived from the input buffer
 
 
+
     /*
         Constructor/destructor
     */
@@ -126,6 +127,7 @@ public: // Making everything public temporarily
     }
 
 
+
     /*
         Basic networking functionality
     */
@@ -215,6 +217,12 @@ public: // Making everything public temporarily
         else if(cmd.starts_with("cd ")){
             this->cd(cmd.substr(3));
         }
+        else if(cmd.starts_with("rm ")){
+            this->rm(cmd.substr(3));
+        }
+        else if(cmd.starts_with("mkdir ")){
+            this->mkdir(cmd.substr(6));
+        }
         else if(cmd.starts_with("grab ")){
             this->grab(cmd.substr(5));
         }
@@ -227,6 +235,27 @@ public: // Making everything public temporarily
         else{
             this->plainTextMessageHistory.push_back("Unknown command: " + cmd);
         }
+    }
+    
+    void genericCmd(std::string cmd){
+        this->sockFdMutex.lock();
+        int bytesSent = send(this->sockFd, cmd.c_str(), cmd.length(), 0);
+        if(bytesSent < 0){
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)");
+            this->sockFdMutex.unlock();
+            return;
+        }
+        // Receive the response from the client
+        char cmdRecvBuffer[4096] = {0}; // Ideally this would be dynamic, will do later
+        int bytesReceived = recv(this->sockFd, cmdRecvBuffer, 4096, 0);
+        if(bytesReceived < 0){
+            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+            this->sockFdMutex.unlock();
+            return;
+        }
+        std::string cmdRecvBufferString = std::string(cmdRecvBuffer); // Convert to a string for easier parsing
+        this->plainTextMessageHistory.push_back(cmdRecvBufferString);
+        this->sockFdMutex.unlock();
     }
 
     void pwd(){
@@ -293,24 +322,15 @@ public: // Making everything public temporarily
     }
 
     void cd(std::string path){
-        this->sockFdMutex.lock();
-        int bytesSent = send(this->sockFd, ("cd;" + path + ";").c_str(), path.length() + 4, 0);
-        if(bytesSent < 0){
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)");
-            this->sockFdMutex.unlock();
-            return;
-        }
-        // Receive the response from the client
-        char cdRecvBuffer[4096] = {0}; // Ideally this would be dynamic, will do later
-        int bytesReceived = recv(this->sockFd, cdRecvBuffer, 4096, 0);
-        if(bytesReceived < 0){
-            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
-            this->sockFdMutex.unlock();
-            return;
-        }
-        std::string cdRecvBufferString = std::string(cdRecvBuffer); // Convert to a string for easier parsing
-        this->plainTextMessageHistory.push_back(cdRecvBufferString);
-        this->sockFdMutex.unlock();
+        this->genericCmd("cd;" + path + ";");
+    }
+
+    void rm(std::string path){
+        this->genericCmd("rm;" + path + ";");
+    }
+
+    void mkdir(std::string path){
+        this->genericCmd("mkdir;" + path + ";");
     }
 
     void grab(std::string path){
