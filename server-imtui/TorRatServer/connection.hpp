@@ -208,7 +208,10 @@ public: // Making everything public temporarily
 
     void parseSendCmd(std::string cmd){
         this->plainTextMessageHistory.push_back("--> " + cmd);
-        if(cmd.starts_with("pwd")){
+        if(cmd.starts_with("help")){
+            this->help();
+        }
+        else if(cmd.starts_with("pwd")){
             this->pwd();
         }
         else if(cmd.starts_with("ls")){
@@ -237,6 +240,19 @@ public: // Making everything public temporarily
         }
     }
     
+    void help(){
+        this->plainTextMessageHistory.push_back("= Available commands:");
+        this->plainTextMessageHistory.push_back("== help - Displays this help message");
+        this->plainTextMessageHistory.push_back("== pwd - Displays the current working directory");
+        this->plainTextMessageHistory.push_back("== ls - Lists the files in the current working directory");
+        this->plainTextMessageHistory.push_back("== cd <path> - Changes the current working directory to <path>");
+        this->plainTextMessageHistory.push_back("== rm <path> - Removes the file at <path>");
+        this->plainTextMessageHistory.push_back("== mkdir <path> - Creates a directory at <path>");
+        this->plainTextMessageHistory.push_back("== grab <path> - Downloads the file at the remote <path> to this machine (at ./)");
+        this->plainTextMessageHistory.push_back("== upload <path> - Uploads the file at the local <path> to the remote machine");
+        this->plainTextMessageHistory.push_back("== exec <command> - Executes the command on the remote machine via _popen()");
+    }
+
     void genericCmd(std::string cmd){
         this->sockFdMutex.lock();
         int bytesSent = send(this->sockFd, cmd.c_str(), cmd.length(), 0);
