@@ -113,6 +113,8 @@ private:
         this->plainTextMessageHistory.push_back("== clear - Clears the message history");
         this->plainTextMessageHistory.push_back("== pwd - Displays the current working directory");
         this->plainTextMessageHistory.push_back("== ls - Lists the files in the current working directory");
+        this->plainTextMessageHistory.push_back("== ls -a - Lists the files in the current working directory, including hidden files");
+        this->plainTextMessageHistory.push_back("== == (dir and dir /a are also valid commands)");
         this->plainTextMessageHistory.push_back("== cd <path> - Changes the current working directory to <path>");
         this->plainTextMessageHistory.push_back("== rm <path> - Removes the file at <path>");
         this->plainTextMessageHistory.push_back("== mkdir <path> - Creates a directory at <path>");
