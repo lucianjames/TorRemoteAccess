@@ -378,7 +378,13 @@ private:
 
         // Add the response to the plain text message history:
         this->plainTextMessageHistory.push_back("=== exec() response ===");
-        this->plainTextMessageHistory.push_back(std::string(response.begin(), response.end()-1));
+        // Split it up based on newlines to prevent crashing imgui (a single giant line will cause imgui/imtui to try and render too many triangles)
+        // Example: calling "exec dir" inside system32 will return lots of stuff and it made it crash lol, but now it doesn't
+        std::stringstream ss(std::string(response.begin(), response.end()-1));
+        std::string line;
+        while(std::getline(ss, line, '\n')){
+            this->plainTextMessageHistory.push_back(line);
+        }
         this->plainTextMessageHistory.push_back("=== exec() response ===");
 
         this->sockFdMutex.unlock();
