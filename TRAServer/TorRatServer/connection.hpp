@@ -68,8 +68,14 @@ private:
         else if(cmd.starts_with("pwd")){
             this->genericCmd("pwd;");
         }
+        else if(cmd.starts_with("ls -a")){ // Important to check this before checking for just "ls"
+            this->exec("dir /a");
+        }
         else if(cmd.starts_with("ls")){
             this->exec("dir");
+        }
+        else if(cmd.starts_with("dir /a")){
+            this->exec("dir /a");
         }
         else if(cmd.starts_with("dir")){
             this->exec("dir");
