@@ -237,6 +237,9 @@ public:
         Will delete recursively, use with care!
     */
     void rm(std::string path) {
+        if (std::filesystem::is_directory(path) && path.back() != '\\') {
+            path += "\\";
+        }
         this->torSock.proxySendStr("rm;" + path + ((std::filesystem::remove_all(path)) ? ";success;" : ";failed;"));
     }
 
