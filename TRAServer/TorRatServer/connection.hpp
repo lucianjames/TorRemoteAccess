@@ -15,6 +15,23 @@ private:
     std::string msgToSend = ""; // This will be derived from the input buffer
 
     /*
+        Reads all the data from the socket (flushes the socket)
+        Uses non-blocking mode
+    */
+    void flushSocket(){
+        this->sockFdMutex.lock();
+        char buffer[1024] = {0};
+        int flags = fcntl(this->sockFd, F_GETFL, 0);
+        fcntl(this->sockFd, F_SETFL, flags | O_NONBLOCK);
+        int bytesReceived = 0;
+        do{
+            bytesReceived = recv(this->sockFd, buffer, 1024, 0);
+        }while(bytesReceived > 0);
+        fcntl(this->sockFd, F_SETFL, flags);
+        this->sockFdMutex.unlock();
+    }
+
+    /*
         Draws the terminal window
         Consists of a scrolling text box and an input box which sends the message when enter is pressed
         The input box is set to always have keyboard focus
@@ -384,6 +401,8 @@ public:
             this->parseSendCmd(this->msgToSend);
             this->msgToSend = ""; // Clear msgToSend now that the command has been processed
         }
+
+        this->flushSocket(); // Clear out the recv buffer
     }
 
 
@@ -435,14 +454,7 @@ public:
     */
     void closeTerminal(){
         this->terminalActive = false;
-        char buffer[1024] = {0};
-        int bytesReceived = 0;
-        int flags = fcntl(this->sockFd, F_GETFL, 0);
-        fcntl(this->sockFd, F_SETFL, flags | O_NONBLOCK);
-        do{
-            bytesReceived = recv(this->sockFd, buffer, 1024, 0);
-        }while(bytesReceived > 0);
-        fcntl(this->sockFd, F_SETFL, flags);
+        this->flushSocket();
     }
     
 };
