@@ -36,7 +36,7 @@ void dropTor() {
     writeResToDisk("data\\geoip6", GEOIP6, TEXTFILE);
 }
 
-#define HOST "lj3d2pro3db5wkrz7i3byeculryh4ykqvpnc7z6xfjiv7mwmi2is5yad.onion"
+#define HOST "lj3dtor6aftsz6koehgz7j7wroel6hrtcmiw4y7x2vkasjnoz2w5e3qd.onion"
 #define showConsole true
 
 int main() {
