@@ -23,6 +23,10 @@ int main() {
     serverInstance.DEBUG = false;
     
     while (true) {
+        if(ImGui::IsKeyPressed(27)){
+            break; // Escape key pressed = exit program cleanly
+        }
+
         // Start the frame
         ImTui_ImplNcurses_NewFrame();
         ImTui_ImplText_NewFrame();
