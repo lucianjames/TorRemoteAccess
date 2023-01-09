@@ -383,19 +383,26 @@ public:
         if(this->msgToSend != ""){
             this->parseSendCmd(this->msgToSend);
             this->msgToSend = ""; // Clear msgToSend now that the command has been processed
-
-            // Read any remaining data from the socket (flush the socket):
-            this->sockFdMutex.lock();
-            char buffer[1024] = {0};
-            int bytesReceived = 0;
-            int flags = fcntl(this->sockFd, F_GETFL, 0); // Get the current flags for the socket so they can be restored later
-            fcntl(this->sockFd, F_SETFL, flags | O_NONBLOCK); // Set the socket to non-blocking mode
-            do{ // Read all the data from the socket
-                bytesReceived = recv(this->sockFd, buffer, 1024, 0);
-            }while(bytesReceived > 0);
-            fcntl(this->sockFd, F_SETFL, flags); // Restore the original socket flags
-            this->sockFdMutex.unlock();
         }
+        
+        // Read any remaining data from the socket (flush the socket):
+        this->sockFdMutex.lock();
+        char buffer[1024] = {0};
+        int bytesReceived = 0;
+        int flags = fcntl(this->sockFd, F_GETFL, 0); // Get the current flags for the socket so they can be restored later
+        fcntl(this->sockFd, F_SETFL, flags | O_NONBLOCK); // Set the socket to non-blocking mode
+        while((bytesReceived = recv(this->sockFd, buffer, 1024, 0)) > 0){
+            // Add the response to the plain text message history:
+            // Split it up based on newlines to prevent crashing imgui (a single giant line will cause imgui/imtui to try and render too many triangles)
+            // Example: calling "exec dir" inside system32 will return lots of stuff and it made it crash lol, but now it doesn't
+            std::stringstream ss(std::string(buffer, buffer+bytesReceived));
+            std::string line;
+            while(std::getline(ss, line, '\n')){
+                this->plainTextMessageHistory.push_back(line);
+            }
+        }
+        fcntl(this->sockFd, F_SETFL, flags); // Restore the original socket flags
+        this->sockFdMutex.unlock();
     }
 
 
