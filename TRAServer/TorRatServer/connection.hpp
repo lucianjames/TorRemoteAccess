@@ -11,7 +11,7 @@ private:
     bool lastConnectivityCheck = false; // Last result of the connectivity check
     std::vector<std::string> plainTextMessageHistory; // Elements of this vector are displayed in the terminal
     std::vector<std::string> commandHistory; // Stores a list of previously sent commands
-    unsigned int cmdHistSelected = 1;
+    unsigned int cmdHistSelected = 0;
     char inputBuffer[1024] = {0}; // Used for the text input box
     const unsigned int inputBufferSize = 1024; // Size of the input buffer - could probably get rid of this dumb variable
     std::string msgToSend = ""; // This will be derived from the input buffer
@@ -57,21 +57,27 @@ private:
         }
         ImGui::EndChild();
 
-        // If up/down key pressed
+        // If up/down key pressed, then set the input buffer to the appropriate command from the history
         if(ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_UpArrow)) || ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_DownArrow))){
+            // Adjust history selection position
+            bool isUp = ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_UpArrow));
+            if(isUp && this->cmdHistSelected < this->commandHistory.size()){
+                this->cmdHistSelected++;
+            }else if(!isUp && this->cmdHistSelected > 0){
+                this->cmdHistSelected--;
+            }
             // Insert history msg into input buff
-            if(this->commandHistory.size() > 0){
+            if(this->commandHistory.size() > 0 && this->cmdHistSelected != 0){
                 ImGui::ClearActiveID();
                 memset(this->inputBuffer, 0, this->inputBufferSize);
                 strcpy(this->inputBuffer, this->commandHistory[this->commandHistory.size()-this->cmdHistSelected].c_str());
                 ImGui::SetKeyboardFocusHere();
             }
-            // Adjust history selection position
-            bool isUp = ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_UpArrow));
-            if(isUp && this->cmdHistSelected < this->commandHistory.size()){
-                this->cmdHistSelected++;
-            }else if(!isUp && this->cmdHistSelected > 1){
-                this->cmdHistSelected--;
+            // Clear the buffer if scrolling back down to 0
+            if(this->cmdHistSelected == 0){
+                ImGui::ClearActiveID();
+                memset(this->inputBuffer, 0 , this->inputBufferSize);
+                ImGui::SetKeyboardFocusHere();
             }
         }
 
@@ -80,7 +86,7 @@ private:
             this->msgToSend = std::string(this->inputBuffer); // this->msgToSend will be processed when this->update() is called
             if(this->msgToSend != ""){
                 this->commandHistory.push_back(this->msgToSend);
-                this->cmdHistSelected = 1;
+                this->cmdHistSelected = 0;
                 memset(this->inputBuffer, 0, this->inputBufferSize); // Clear the input buffer
             }
         }
