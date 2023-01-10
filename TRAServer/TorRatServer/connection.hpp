@@ -67,9 +67,10 @@ private:
                 ImGui::SetKeyboardFocusHere();
             }
             // Adjust history selection position
-            if(ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_UpArrow)) && this->cmdHistSelected < this->commandHistory.size()){
+            bool isUp = ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_UpArrow));
+            if(isUp && this->cmdHistSelected < this->commandHistory.size()){
                 this->cmdHistSelected++;
-            }else if(this->cmdHistSelected > 1){
+            }else if(!isUp && this->cmdHistSelected > 1){
                 this->cmdHistSelected--;
             }
         }
