@@ -10,6 +10,8 @@ private:
     std::mutex sockFdMutex; // Only one thread can use the socket file descriptor at a time
     bool lastConnectivityCheck = false; // Last result of the connectivity check
     std::vector<std::string> plainTextMessageHistory; // Elements of this vector are displayed in the terminal
+    std::vector<std::string> commandHistory; // Stores a list of previously sent commands
+    unsigned int cmdHistSelected = 1;
     char inputBuffer[1024] = {0}; // Used for the text input box
     const unsigned int inputBufferSize = 1024; // Size of the input buffer - could probably get rid of this dumb variable
     std::string msgToSend = ""; // This will be derived from the input buffer
@@ -55,11 +57,31 @@ private:
         }
         ImGui::EndChild();
 
-        // Draw the input box:
+        // If up/down key pressed
+        if(ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_UpArrow)) || ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_DownArrow))){
+            // Insert history msg into input buff
+            if(this->commandHistory.size() > 0){
+                ImGui::ClearActiveID();
+                memset(this->inputBuffer, 0, this->inputBufferSize);
+                strcpy(this->inputBuffer, this->commandHistory[this->commandHistory.size()-this->cmdHistSelected].c_str());
+                ImGui::SetKeyboardFocusHere();
+            }
+            // Adjust history selection position
+            if(ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_UpArrow)) && this->cmdHistSelected < this->commandHistory.size()){
+                this->cmdHistSelected++;
+            }else if(this->cmdHistSelected > 1){
+                this->cmdHistSelected--;
+            }
+        }
+
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth());
         if(ImGui::InputText("##Input", this->inputBuffer, this->inputBufferSize, ImGuiInputTextFlags_EnterReturnsTrue)){ // If enter is pressed, then set this->msgToSend to the contents of the input buffer
             this->msgToSend = std::string(this->inputBuffer); // this->msgToSend will be processed when this->update() is called
-            memset(this->inputBuffer, 0, this->inputBufferSize); // Clear the input buffer
+            if(this->msgToSend != ""){
+                this->commandHistory.push_back(this->msgToSend);
+                this->cmdHistSelected = 1;
+                memset(this->inputBuffer, 0, this->inputBufferSize); // Clear the input buffer
+            }
         }
 
         // Set the keyboard focus to the input box (as long as its not being used for something else):
