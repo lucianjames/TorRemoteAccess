@@ -123,7 +123,7 @@ private:
         // Send the command to the client:
         int bytesSent = send(this->sockFd, cmd.c_str(), cmd.length(), 0);
         if(bytesSent < 0){ // A negative value indicates an error
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)");
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)" + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
         }
@@ -132,7 +132,7 @@ private:
         char cmdRecvBuffer[4096] = {0}; // 4096 bytes should easily be enough for the responses to any commands sent using this function
         int bytesReceived = recv(this->sockFd, cmdRecvBuffer, 4096, 0);
         if(bytesReceived < 0){ // A negative value here also indicates an error. Not sure if I really need to be handling this error (will it actually occur?)
-            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
         }
@@ -159,7 +159,7 @@ private:
         // Send the grab command to the client:
         int bytesSent = send(this->sockFd, ("grab;" + path + ";").c_str(), path.length() + 6, 0);
         if(bytesSent < 0){
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)");
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)" + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
         }
@@ -168,7 +168,7 @@ private:
         char grabRecvBuffer[4096] = {0};
         int bytesReceived = recv(this->sockFd, grabRecvBuffer, 4096, 0);
         if(bytesReceived < 0){
-            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
         }
@@ -193,7 +193,8 @@ private:
         while(bytesReceivedTotal < fileSize){
             bytesReceived = recv(this->sockFd, grabRecvBuffer, 4096, 0);
             if(bytesReceived < 0){
-                this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+                // Get the error code and append it to the message history:
+                this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
                 this->sockFdMutex.unlock();
                 return;
             }
@@ -237,7 +238,7 @@ private:
             // Send the upload request to the client:
             int bytesSent = send(this->sockFd, uploadData.data(), uploadData.size(), 0);
             if(bytesSent < 0){
-                this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)");
+                this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)" + " | " + strerror(errno));
                 this->sockFdMutex.unlock();
                 return;
             }
@@ -247,7 +248,7 @@ private:
             char responseBuffer[1024] = {0};
             int bytesReceived = recv(this->sockFd, responseBuffer, 1024, 0);
             if(bytesReceived < 0){
-                this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+                this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
                 this->sockFdMutex.unlock();
                 return;
             }
@@ -271,7 +272,7 @@ private:
         // Send the command to the client
         int bytesSent = send(this->sockFd, ("exec;" + cmd + ";").c_str(), cmd.length() + 6, 0);
         if(bytesSent < 0){
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)");
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)" + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
         }
@@ -280,7 +281,7 @@ private:
         char responseBuffer[4096] = {0};
         int bytesReceived = recv(this->sockFd, responseBuffer, 4096, 0);
         if(bytesReceived < 0){
-            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
         }
@@ -306,7 +307,7 @@ private:
         while(bytesReceivedTotal < responseSize){
             bytesReceived = recv(this->sockFd, responseBuffer, 4096, 0);
             if(bytesReceived < 0){
-                this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived));
+                this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
                 this->sockFdMutex.unlock();
                 return;
             }
