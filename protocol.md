@@ -1,42 +1,45 @@
 # Commands
-## pwd
-Sends as:
-`pwd;`
-Response:
-`pwd;<current directory>;`
 
-## ls
-Sends as:
-`ls;`
-Response:
-`ls;<file/folder/>;<file/folder/>;...;`
+## Generic commands
+Generic commands that dont require special processing can be sent to the client using the following format:
 
-## rm
-Sends as:
-`rm;<path>;`
-Response:
-`rm;<path>;success;` OR `rm;<path>;failed;`
+`<cmd>;<argument>;`
 
-## cd
-Sends as:
-`cd;dir;`
-Response:
-`cd;success;` OR `cd;failed;`
+The response from the client will then be:
 
-## grab
-Sends as:
-`grab;<path>;`
-Response:
-`grab;<path>;<filesize>;<raw file data>;`
+`<cmd>;<response>;`
 
-## upload
-Sends as:
-`upload;<filename>;<filesize>;<raw file data>;`
-Response:
-`upload;<filename>;success;` OR `upload;<filename>;failed;`
+Currently, only the `cd` command uses this.
 
-## exec
-Sends as:
+## Exec
+Sends a command to the client to then be executed via _popen(), sent using the following format:
+
 `exec;<command>;`
-Response:
-`exec;<command>;<output>;`
+
+The client responds with:
+
+`exec;<command>;<response size>;<response>;`
+
+Thanks to the fact that the response size is sent to the server, there is no limit on how much data exec can return.
+However, the current implementation of the client uses an std::string for the response, so null bytes in the buffer will cause problems!
+
+## Grab
+Transfers a file from the client to the server, the server sends the following request to the client:
+
+`grab;<file path>;`
+
+The client will then respond with the following:
+
+`grab;<file path>;<file size>;<file data>;`
+
+On fail, the client will set the file size to 0 and the file data to ERR
+
+## Upload
+Grab but in reverse, allows the server to place a file onto the client machine.
+
+`upload;<file name>;<file size>;<file data>;`
+
+Client response:
+
+`upload;<failed/success>`
+
