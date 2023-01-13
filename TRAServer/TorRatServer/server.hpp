@@ -1,5 +1,6 @@
 #include "includeCrap.hpp"
 #include "connection.hpp"
+#include "logWindow.hpp"
 
 /*
     The server class manages new connections and checking the status of existing connections
@@ -15,6 +16,7 @@ private:
     int selectedConnection = 0; // Index of the selected connection in the connections vector
     unsigned long int n_conn = 0; // For debugging purposes
     unsigned int connectivityCheckIntervalSeconds = 5; // Interval between connectivity checks
+    logWindow servLog; // Log window for the server
 
     /*
         Function that the listener thread runs
@@ -89,6 +91,7 @@ public:
         Constructor - Sets up a socket to listen for new connections on and starts the listener thread
     */
     server(unsigned int port = 8080, unsigned int maxConnections = 32){
+        this->servLog.add("server::server() - INFO: Starting server");
         this->maxConnections = maxConnections;
         // Creating the socket file descriptor
         if ((this->serverListenerFd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
@@ -168,6 +171,9 @@ public:
                        connInfoStrings.size()
         );
         ImGui::End();
+
+        // Draw the log window
+        this->servLog.draw();
     }
 
     void update(){ // Called every frame
