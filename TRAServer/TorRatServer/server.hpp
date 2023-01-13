@@ -5,7 +5,7 @@
     The server class manages new connections and checking the status of existing connections
 */
 class server{
-public: // Also making everything public temporarily
+private:
     int serverListenerFd; // Socket file descriptor for the server to listen for new connections on
     struct sockaddr_in address; // Address of the server
     int opt = 1; // Used for setsockopt
@@ -13,9 +13,77 @@ public: // Also making everything public temporarily
     std::mutex connectionsMutex; // Mutex for the connections vector
     unsigned int maxConnections; // Maximum number of connections to the server
     int selectedConnection = 0; // Index of the selected connection in the connections vector
-    bool DEBUG = false;
     unsigned long int n_conn = 0; // For debugging purposes
     unsigned int connectivityCheckIntervalSeconds = 5; // Interval between connectivity checks
+
+    /*
+        Function that the listener thread runs
+        Places new connections into the connections vector, does nothing else.
+        (Hopefully) thread safe via the connectionsMutex
+    */
+    void listenerThreadFunction(){
+        while(true){ // This thread goes until the program is closed
+            // Dont allow more than 10 connections:
+            if(this->connections.size() >= this->maxConnections){
+                std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Sleep for a bit to reduce CPU usage, helps prevent DOS kinda stuff from happening :)
+                continue; // Its been a whole 100ms, so lets go back to the top of the loop
+            }
+            // Set up the variables required to accept a new connection
+            int newConnectionFd; // The file descriptor for the new connection, will be set by accept() then used to instantiate a new connection object
+            struct sockaddr_in address;
+            int addrlen = sizeof(address);
+            // Wait for a new connection
+            if ((newConnectionFd = accept(this->serverListenerFd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) {
+                perror_exit("server::listenerThreadFunction() - ERR: accept() failed");
+            }
+            this->n_conn++; // Increment the variable used to keep track of the number of connections
+            // Create a unique_ptr to a new connection object for the new connection
+            std::unique_ptr<connection> newConnection = std::make_unique<connection>(newConnectionFd);
+            // Verify the connection using the intialConnection() function (part of the connection class)
+            if(!newConnection->intialConnection()){
+                continue; // If the connection failed, dont add it to the connections vector
+            }
+            this->connectionsMutex.lock(); // Make sure this thread is the only one using the connections vector
+            this->connections.push_back(std::move(newConnection)); // Move ownership of the unique_ptr<connection> to the connections vector
+            this->connectionsMutex.unlock();
+        }
+    }
+
+    /*
+        Function that the connectivity checking thread runs
+        Checks if the connections are still connected by sending a ping to them
+        (Hopefully) thread safe via the connectionsMutex :D
+    */
+    void connectivityCheckThreadFunction(){
+        while(true){
+            std::this_thread::sleep_for(std::chrono::seconds(connectivityCheckIntervalSeconds));
+            this->connectionsMutex.lock();
+            // Iterate over every connection, delete it from the vector if connectivityCheck() returns false
+            for(int i = 0; i < this->connections.size(); i++){
+                // Under extreme stress-test conditions, the connections vector can contain NULL pointers (not sure how)
+                if(this->connections[i] == NULL){ // This is a hack to prevent a segfault
+                    this->connections.erase(this->connections.begin() + i);
+                    i--;
+                    continue;
+                }
+                if(this->connections[i]->terminalActive){ // Dont send a ping to the connection if its terminal is active
+                    continue;
+                }
+                if(!this->connections[i]->connectivityCheck()){ // If the connectivity check fails, delete the connection
+                    this->connections.erase(this->connections.begin() + i);
+                    if(this->selectedConnection > i){ // So we dont mess up whats currently selected in the UI
+                        this->selectedConnection--;
+                    }
+                    i--;
+                }
+            }
+            this->connectionsMutex.unlock();
+        }
+    }
+
+
+public:
+    bool DEBUG = false;
 
     /*
         Constructor - Sets up a socket to listen for new connections on and starts the listener thread
@@ -112,71 +180,6 @@ public: // Also making everything public temporarily
             this->connections[i]->update(); // Update the connection
         }
         this->connectionsMutex.unlock(); // Other threads can have fun again :)
-    }
-
-    /*
-        Function that the listener thread runs
-        Places new connections into the connections vector, does nothing else.
-        (Hopefully) thread safe via the connectionsMutex
-    */
-    void listenerThreadFunction(){
-        while(true){ // This thread goes until the program is closed
-            // Dont allow more than 10 connections:
-            if(this->connections.size() >= this->maxConnections){
-                std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Sleep for a bit to reduce CPU usage, helps prevent DOS kinda stuff from happening :)
-                continue; // Its been a whole 100ms, so lets go back to the top of the loop
-            }
-            // Set up the variables required to accept a new connection
-            int newConnectionFd; // The file descriptor for the new connection, will be set by accept() then used to instantiate a new connection object
-            struct sockaddr_in address;
-            int addrlen = sizeof(address);
-            // Wait for a new connection
-            if ((newConnectionFd = accept(this->serverListenerFd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) {
-                perror_exit("server::listenerThreadFunction() - ERR: accept() failed");
-            }
-            this->n_conn++; // Increment the variable used to keep track of the number of connections
-            // Create a unique_ptr to a new connection object for the new connection
-            std::unique_ptr<connection> newConnection = std::make_unique<connection>(newConnectionFd);
-            // Verify the connection using the intialConnection() function (part of the connection class)
-            if(!newConnection->intialConnection()){
-                continue; // If the connection failed, dont add it to the connections vector
-            }
-            this->connectionsMutex.lock(); // Make sure this thread is the only one using the connections vector
-            this->connections.push_back(std::move(newConnection)); // Move ownership of the unique_ptr<connection> to the connections vector
-            this->connectionsMutex.unlock();
-        }
-    }
-
-    /*
-        Function that the connectivity checking thread runs
-        Checks if the connections are still connected by sending a ping to them
-        (Hopefully) thread safe via the connectionsMutex :D
-    */
-    void connectivityCheckThreadFunction(){
-        while(true){
-            std::this_thread::sleep_for(std::chrono::seconds(connectivityCheckIntervalSeconds));
-            this->connectionsMutex.lock();
-            // Iterate over every connection, delete it from the vector if connectivityCheck() returns false
-            for(int i = 0; i < this->connections.size(); i++){
-                // Under extreme stress-test conditions, the connections vector can contain NULL pointers (not sure how)
-                if(this->connections[i] == NULL){ // This is a hack to prevent a segfault
-                    this->connections.erase(this->connections.begin() + i);
-                    i--;
-                    continue;
-                }
-                if(this->connections[i]->terminalActive){ // Dont send a ping to the connection if its terminal is active
-                    continue;
-                }
-                if(!this->connections[i]->connectivityCheck()){ // If the connectivity check fails, delete the connection
-                    this->connections.erase(this->connections.begin() + i);
-                    if(this->selectedConnection > i){ // So we dont mess up whats currently selected in the UI
-                        this->selectedConnection--;
-                    }
-                    i--;
-                }
-            }
-            this->connectionsMutex.unlock();
-        }
     }
 
 };
