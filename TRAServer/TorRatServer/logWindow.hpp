@@ -8,6 +8,9 @@ private:
     std::string title;
 
 public:
+    std::mutex logMutex; // This is used to lock the logMessages vector when it is being modified
+    // This is because multiple threads will be trying to add to the log at the same time
+
     logWindow(std::string title="Log", unsigned int windowWidth=40, unsigned int windowHeight=10){
         this->title = title;
         this->windowWidth = windowWidth;
@@ -15,7 +18,9 @@ public:
     }
 
     void add(std::string m){
+        this->logMutex.lock();
         this->logMessages.push_back(m);
+        this->logMutex.unlock();
     }
 
     void draw(){

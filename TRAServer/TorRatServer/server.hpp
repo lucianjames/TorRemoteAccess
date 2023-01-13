@@ -35,16 +35,21 @@ private:
             struct sockaddr_in address;
             int addrlen = sizeof(address);
             // Wait for a new connection
+            this->servLog.add("server::listenerThreadFunction() - INFO: Waiting for new connection");
             if ((newConnectionFd = accept(this->serverListenerFd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) {
                 perror_exit("server::listenerThreadFunction() - ERR: accept() failed");
             }
+            this->servLog.add("server::listenerThreadFunction() - INFO: New connection accepted");
             this->n_conn++; // Increment the variable used to keep track of the number of connections
             // Create a unique_ptr to a new connection object for the new connection
             std::unique_ptr<connection> newConnection = std::make_unique<connection>(newConnectionFd);
             // Verify the connection using the intialConnection() function (part of the connection class)
+            this->servLog.add("server::listenerThreadFunction() - INFO: Verifying connection");
             if(!newConnection->intialConnection()){
+                this->servLog.add("server::listenerThreadFunction() - WARN: Connection failed verification, discarding");
                 continue; // If the connection failed, dont add it to the connections vector
             }
+            this->servLog.add("server::listenerThreadFunction() - INFO: Connection verified - adding to the list of connections");
             this->connectionsMutex.lock(); // Make sure this thread is the only one using the connections vector
             this->connections.push_back(std::move(newConnection)); // Move ownership of the unique_ptr<connection> to the connections vector
             this->connectionsMutex.unlock();
@@ -59,25 +64,32 @@ private:
     void connectivityCheckThreadFunction(){
         while(true){
             std::this_thread::sleep_for(std::chrono::seconds(connectivityCheckIntervalSeconds));
+            this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Checking connections...");
             this->connectionsMutex.lock();
             // Iterate over every connection, delete it from the vector if connectivityCheck() returns false
             for(int i = 0; i < this->connections.size(); i++){
+                this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Checking connection " + std::to_string(i));
                 // Under extreme stress-test conditions, the connections vector can contain NULL pointers (not sure how)
                 if(this->connections[i] == NULL){ // This is a hack to prevent a segfault
+                    this->servLog.add("server::connectivityCheckThreadFunction() - WARN: NULL pointer in connections vector, deleting");
                     this->connections.erase(this->connections.begin() + i);
                     i--;
                     continue;
                 }
                 if(this->connections[i]->terminalActive){ // Dont send a ping to the connection if its terminal is active
+                    this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Skipping " + std::to_string(i) + " because terminal is active");
                     continue;
                 }
                 if(!this->connections[i]->connectivityCheck()){ // If the connectivity check fails, delete the connection
+                    this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Deleting connection " + std::to_string(i) + " (failed to respond to ping)");
                     this->connections.erase(this->connections.begin() + i);
                     if(this->selectedConnection > i){ // So we dont mess up whats currently selected in the UI
                         this->selectedConnection--;
                     }
                     i--;
+                    continue;
                 }
+                this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Received valid response from " + std::to_string(i));
             }
             this->connectionsMutex.unlock();
         }
@@ -117,10 +129,12 @@ public:
         }
 
         // Start up the thread that listens for and sets up connections
+        this->servLog.add("server::server() - INFO: Starting listener thread");
         std::thread listenerThread(&server::listenerThreadFunction, this);
         listenerThread.detach(); // Detaching the thread so it doesn't need to be joined
 
         // Start the thread which loops over every established connection (which doesnt have an active terminal) and checks if its still alive
+        this->servLog.add("server::server() - INFO: Starting connectivity check thread");
         std::thread connectivityCheckThread(&server::connectivityCheckThreadFunction, this);
         connectivityCheckThread.detach();
     }
@@ -180,6 +194,7 @@ public:
         this->connectionsMutex.lock(); // Lock the connections vector so no other thread can modify it while we are updating
         for(int i=0; i<this->connections.size(); i++){ // For every connection.....
             if(this->connections[i]->terminalActive && this->selectedConnection != i){ // If a connection is active, but it isnt the currently selected terminal
+                this->servLog.add("server::update() - INFO: terminal " + std::to_string(i) + " closed (moved to background)");
                 this->connections[i]->closeTerminal(); // Do some cleanup, because its about to be moved back to the background
             }
             this->connections[i]->terminalActive = (i==this->selectedConnection)?true:false; // Set the terminalActive variable to true if the connection is currently selected in the UI
