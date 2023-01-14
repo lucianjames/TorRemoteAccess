@@ -5,6 +5,11 @@
 #include <ctime>
 #include <chrono>
 #include <fstream>
+#include <mutex>
+#include <string>
+#include <vector>
+#include <thread>
+
 
 class logWindow{
 private:
@@ -42,6 +47,8 @@ public:
     }
 
     void add(std::string m){
+        std::string this_id = std::to_string(std::hash<std::thread::id>()(std::this_thread::get_id())); // wacky copilot code
+        m = "[THREAD ID: " + this_id + "] (" + getTime() + ") " + m; // Add the thread id and time to the message
         this->logMutex.lock();
         this->logMessages.push_back(m);
         if(this->writeToFile){
