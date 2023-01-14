@@ -1,6 +1,10 @@
 #pragma once
 
-#include "includeCrap.hpp"
+#include "imtui/imtui.h"
+
+#include <ctime>
+#include <chrono>
+#include <fstream>
 
 class logWindow{
 private:

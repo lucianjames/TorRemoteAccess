@@ -1,4 +1,9 @@
-#include "includeCrap.hpp"
+#include <mutex>
+#include <vector>
+#include <fcntl.h>
+#include <filesystem>
+#include <algorithm>
+
 #include "logWindow.hpp"
 
 /*

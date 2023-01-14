@@ -1,6 +1,14 @@
-#include "includeCrap.hpp"
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <vector>
+#include <thread>
+#include <mutex>
+#include <chrono>
+
 #include "connection.hpp"
 #include "logWindow.hpp"
+
+#define perror_exit(msg) perror(msg); exit(EXIT_FAILURE);
 
 /*
     The server class manages new connections and checking the status of existing connections

@@ -1,4 +1,8 @@
-#include "includeCrap.hpp"
+#include <signal.h>
+
+#include "imtui/imtui.h"
+#include "imtui/imtui-impl-ncurses.h"
+
 #include "server.hpp"
 
 #define serverPort 52727
