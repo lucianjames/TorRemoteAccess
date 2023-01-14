@@ -12,12 +12,9 @@ private:
     std::string logFile;
 
     std::string getTime(){
-        time_t now = time(0);
-        struct tm tstruct;
-        char buf[80];
-        tstruct = *localtime(&now);
-        strftime(buf, sizeof(buf), "%Y-%m-%d.%X", &tstruct);
-        return buf;
+        std::time_t t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+        std::string tStr = std::ctime(&t);
+        return tStr.substr(0, tStr.length()-1); // Remove newline
     }
 
 public:

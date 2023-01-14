@@ -22,6 +22,7 @@
 #include <sstream>
 #include <fstream>
 #include <filesystem>
+#include <ctime>
 
 // Also this macro
 #define perror_exit(msg) perror(msg); exit(EXIT_FAILURE);
