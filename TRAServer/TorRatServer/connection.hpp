@@ -111,6 +111,7 @@ private:
         Parses the given command and calls the appropriate function
     */
     void parseSendCmd(std::string cmd){
+        this->servLogWin->add("connection::parseSendCmd() - INFO: Called with cmd: " + cmd);
         this->plainTextMessageHistory.push_back("--> " + cmd);
         if(cmd.starts_with("clear")){
             this->plainTextMessageHistory.clear();
