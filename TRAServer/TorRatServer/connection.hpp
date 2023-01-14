@@ -337,7 +337,7 @@ private:
             this->sockFdMutex.unlock();
             return;
         }
-        this->servLogWin->add("Sent " + std::to_string(bytesSent) + " bytes of data, waiting for response");
+        this->servLogWin->add("connection::exec() - INFO: Sent " + std::to_string(bytesSent) + " bytes of data, waiting for response");
 
         // Receive the first 4096 bytes of the response, this is by far enough to get the response length:
         char responseBuffer[4096] = {0};
