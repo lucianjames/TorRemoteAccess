@@ -36,7 +36,7 @@ public:
         this->windowHeight = windowHeight;
         if(this->writeToFile){
             std::ofstream logFile(this->logFile, std::ios::app);
-            logFile << " ===== New Log start (" << getTime() << ") ===== " << std::endl;
+            logFile << "\n\n\n\n===== New Log start (" << getTime() << ") =====" << std::endl;
         }
     }
 
