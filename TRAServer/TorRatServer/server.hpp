@@ -103,6 +103,7 @@ public:
         Constructor - Sets up a socket to listen for new connections on and starts the listener thread
     */
     server(unsigned int port = 8080, unsigned int maxConnections = 32){
+        this->servLog.setup("Server Log", true, "TRAServer.log");
         this->servLog.add("server::server() - INFO: Starting server");
         this->maxConnections = maxConnections;
         // Creating the socket file descriptor

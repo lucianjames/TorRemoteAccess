@@ -8,20 +8,46 @@ private:
     unsigned int windowWidth;
     unsigned int windowHeight;
     std::string title;
+    bool writeToFile = false;
+    std::string logFile;
+
+    std::string getTime(){
+        time_t now = time(0);
+        struct tm tstruct;
+        char buf[80];
+        tstruct = *localtime(&now);
+        strftime(buf, sizeof(buf), "%Y-%m-%d.%X", &tstruct);
+        return buf;
+    }
 
 public:
     std::mutex logMutex; // This is used to lock the logMessages vector when it is being modified
     // This is because multiple threads will be trying to add to the log at the same time
 
-    logWindow(std::string title="Log", unsigned int windowWidth=40, unsigned int windowHeight=10){
+    void setup(std::string title="Log",
+               bool writeToFile=false,
+               std::string logFile="log.txt",
+               unsigned int windowWidth=80, 
+               unsigned int windowHeight=10){
         this->title = title;
+        this->writeToFile = writeToFile;
+        this->logFile = logFile;
         this->windowWidth = windowWidth;
         this->windowHeight = windowHeight;
+        if(this->writeToFile){
+            std::ofstream logFile(this->logFile, std::ios::app);
+            logFile << " ===== New Log start (" << getTime() << ") ===== " << std::endl;
+        }
     }
 
     void add(std::string m){
         this->logMutex.lock();
         this->logMessages.push_back(m);
+        if(this->writeToFile){
+            std::ofstream logFile(this->logFile, std::ios::app);
+            logFile << m << std::endl;
+            logFile.close();
+        }
         this->logMutex.unlock();
     }
 
