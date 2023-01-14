@@ -1,3 +1,5 @@
+#pragma once
+
 #include "includeCrap.hpp"
 
 class logWindow{

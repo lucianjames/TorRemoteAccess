@@ -42,7 +42,7 @@ private:
             this->servLog.add("server::listenerThreadFunction() - INFO: New connection accepted");
             this->n_conn++; // Increment the variable used to keep track of the number of connections
             // Create a unique_ptr to a new connection object for the new connection
-            std::unique_ptr<connection> newConnection = std::make_unique<connection>(newConnectionFd);
+            std::unique_ptr<connection> newConnection = std::make_unique<connection>(newConnectionFd, &this->servLog);
             // Verify the connection using the intialConnection() function (part of the connection class)
             this->servLog.add("server::listenerThreadFunction() - INFO: Verifying connection");
             if(!newConnection->intialConnection()){
