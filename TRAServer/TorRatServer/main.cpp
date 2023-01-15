@@ -24,7 +24,6 @@ int main() {
 
     // Server setup (see server.hpp)
     server serverInstance(serverPort, 16);
-    serverInstance.DEBUG = false;
     
     while (true) {
         if(ImGui::IsKeyPressed(27)){

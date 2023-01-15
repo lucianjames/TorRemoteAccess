@@ -78,4 +78,16 @@ public:
         ImGui::End();
     }
 
+    void clear(){
+        this->logMutex.lock();
+        this->logMessages.clear();
+        this->logMutex.unlock();
+    }
+
+    void clearFile(){
+        std::ofstream logFile(this->logFile, std::ios::trunc);
+        logFile << "===== Log cleared (" << getTime() << ") =====" << std::endl;
+        logFile.close();
+    }
+
 };

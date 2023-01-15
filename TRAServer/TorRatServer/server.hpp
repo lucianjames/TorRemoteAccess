@@ -23,8 +23,10 @@ private:
     unsigned int maxConnections; // Maximum number of connections to the server
     int selectedConnection = 0; // Index of the selected connection in the connections vector
     unsigned long int n_conn = 0; // For debugging purposes
-    unsigned int connectivityCheckIntervalSeconds = 5; // Interval between connectivity checks
+    int connectivityCheckIntervalSeconds = 10; // Interval between connectivity checks
     logWindow servLog; // Log window for the server
+    bool debugEnabled = false;
+    bool checkConnectivity = true; // If true, the server will check the connectivity of all connections every connectivityCheckIntervalSeconds seconds
 
     /*
         Function that the listener thread runs
@@ -72,6 +74,9 @@ private:
     void connectivityCheckThreadFunction(){
         while(true){
             std::this_thread::sleep_for(std::chrono::seconds(connectivityCheckIntervalSeconds));
+            if(!this->checkConnectivity){ // If checkConnectivity is false, dont check the connectivity of the connections
+                continue;
+            }
             this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Checking connections...");
             this->connectionsMutex.lock();
             // Iterate over every connection, delete it from the vector if connectivityCheck() returns false
@@ -103,9 +108,136 @@ private:
         }
     }
 
+    /*
+        Used to check connectivity just once, runs in the main thread
+        Does not ignore active terminals
+    */
+    void connectivityCheckOnce(){
+        this->servLog.add("server::connectivityCheckOnce() - INFO: Checking connections...");
+        this->connectionsMutex.lock();
+        for(int i = 0; i < this->connections.size(); i++){
+            this->servLog.add("server::connectivityCheckOnce() - INFO: Checking connection " + std::to_string(i));
+            if(this->connections[i] == NULL){ // This is a hack to prevent a segfault
+                this->servLog.add("server::connectivityCheckOnce() - WARN: NULL pointer in connections vector, deleting");
+                this->connections.erase(this->connections.begin() + i);
+                i--;
+                continue;
+            }
+            if(!this->connections[i]->connectivityCheck()){ // If the connectivity check fails, delete the connection
+                this->servLog.add("server::connectivityCheckOnce() - INFO: Deleting connection " + std::to_string(i) + " (failed to respond to ping)");
+                this->connections.erase(this->connections.begin() + i);
+                if(this->selectedConnection > i){ // So we dont mess up whats currently selected in the UI
+                    this->selectedConnection--;
+                }
+                i--;
+                continue;
+            }
+            this->servLog.add("server::connectivityCheckOnce() - INFO: Received valid response from " + std::to_string(i));
+        }
+        this->connectionsMutex.unlock();
+    }
+
+    /*
+        Draws a menu that can be used to control a few different things
+    */
+    void drawMenu(){
+        // Draw the menu window
+        unsigned int MenuWindowWidth = 35;
+        unsigned int MenuWindowHeight = 20;
+        ImGui::SetNextWindowPos(ImVec2(0, 15), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(MenuWindowWidth, MenuWindowHeight), ImGuiCond_Once);
+        ImGui::Begin("Server Menu");
+
+        // Log clearing buttons
+        ImGui::Dummy(ImVec2(0, 1));
+        if(ImGui::Button("Clear log")){
+            this->servLog.clear();
+        }
+        ImGui::SameLine();
+        if(ImGui::Button("Clear log file")){
+            this->servLog.clearFile();
+        }
+
+        // Debug checkbox
+        ImGui::Dummy(ImVec2(0, 1));
+        ImGui::Checkbox("Extra debug windows", &this->debugEnabled);
+
+        // Connectivity check checkbox and interval input
+        ImGui::Dummy(ImVec2(0, 1));
+        ImGui::Text("Connectivity check interval (s)");
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth()-1.0f);
+        ImGui::InputInt("##Connectivity check interval (s)", &this->connectivityCheckIntervalSeconds);
+        if(this->connectivityCheckIntervalSeconds < 1){ // Will segfault if tries to check every 0 seconds
+            this->connectivityCheckIntervalSeconds = 1;
+        }
+        ImGui::Checkbox("Enable auto connectivity check", &this->checkConnectivity);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+        ImGui::TextWrapped("Note: Only checks connections that are not currently in use. Use the button below to run a single check on all connections.");
+        ImGui::PopStyleColor();
+        // Manual connectivity check button
+        if(ImGui::Button("Check connections now")){
+            this->connectivityCheckOnce();
+        }
+
+        ImGui::End();
+    }
+
+    /*
+        Draws connections list
+    */
+    void drawConnectionsList(){
+        // Draw the list of connections window
+        unsigned int ConnListWindowWidth = 100;
+        unsigned int ConnListWindowHeight = 10;
+        ImGui::SetNextWindowPos(ImVec2((ImGui::GetIO().DisplaySize.x/2)-(ConnListWindowWidth/2), 0), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(ConnListWindowWidth, ConnListWindowHeight), ImGuiCond_Once);
+        ImGui::Begin("Server Connections");
+        // Have to make a vector of strings to pass to the ListBox function
+        // Because it requires a pointer to the stuff to write onto the screen >:(
+        std::vector<std::string> connInfoStrings; // Creating this every single frame is not very efficient, but its not really a problem
+        this->connectionsMutex.lock(); // Make sure the connections arent being modified while the connInfoStrings are being assembled
+        for(auto &c : this->connections){
+            connInfoStrings.push_back(c->username + "@" + c->hostname + " (" + c->publicIp + ") on socket " + std::to_string(c->sockFd));
+        }
+        this->connectionsMutex.unlock();
+        if(connInfoStrings.size() == 0){
+            connInfoStrings.push_back("No connections"); // This prevents the listbox from looking weird when there are no connections
+        }
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth());
+        ImGui::ListBox("##Connections", 
+                       &this->selectedConnection, 
+                       [](void* data, int idx, const char** out_text){
+                            std::vector<std::string>* connInfoStrings = (std::vector<std::string>*)data; // Cast the void* to an std::vector<std::string>*
+                            *out_text = connInfoStrings->at(idx).c_str(); // Get a pointer to the string at the current index (idx)
+                            return true;
+                       },
+                       (void*)&connInfoStrings, // This is the void* data variable of the lambda function
+                       connInfoStrings.size(),
+                       connInfoStrings.size()
+        );
+        ImGui::End();
+    }
+
+    /*
+        Draws debug info
+    */
+    void drawDebugInfo(){
+        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(30, 4), ImGuiCond_Once);
+        ImGui::Begin("Server Debug Window");
+        ImGui::Text("Number of active connections: %d", this->connections.size());
+        ImGui::Text("Number of connections since start: %d", this->n_conn);
+        ImGui::End();
+        // Also, draw the debugging windows built into each connection:
+        this->connectionsMutex.lock(); // Lock the connections vector so no other thread can modify while debug windows are being drawn
+        for(auto &c : this->connections){
+            c->drawDebugWindow(); // Draw each windows debug info window
+        }
+        this->connectionsMutex.unlock();
+    }
+
 
 public:
-    bool DEBUG = false;
 
     /*
         Constructor - Sets up a socket to listen for new connections on and starts the listener thread
@@ -149,54 +281,12 @@ public:
     }
 
     void draw(){
-        if(this->DEBUG){ // If debugging is enabled, draw a window which shows a little bit of info about the server
-            ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
-            ImGui::SetNextWindowSize(ImVec2(30, 4), ImGuiCond_Once);
-            ImGui::Begin("Server Debug Window");
-            ImGui::Text("Number of active connections: %d", this->connections.size());
-            ImGui::Text("Number of connections since start: %d", this->n_conn);
-            ImGui::End();
-            // Also, draw the debugging windows built into each connection:
-            this->connectionsMutex.lock(); // Lock the connections vector so no other thread can modify while debug windows are being drawn
-            for(auto &c : this->connections){
-                c->drawDebugWindow(); // Draw each windows debug info window
-            }
-            this->connectionsMutex.unlock();
+        this->drawMenu();
+        this->drawConnectionsList(); // Draws the list of active connections
+        this->servLog.draw(); // Draw the server log
+        if(this->debugEnabled){ // If debugging is enabled, draw a window which shows a little bit of info about the server
+            this->drawDebugInfo();
         }
-
-        // Draw the list of connections window
-        unsigned int ConnListWindowWidth = 100;
-        unsigned int ConnListWindowHeight = 10;
-        ImGui::SetNextWindowPos(ImVec2((ImGui::GetIO().DisplaySize.x/2)-(ConnListWindowWidth/2), 0), ImGuiCond_Once);
-        ImGui::SetNextWindowSize(ImVec2(ConnListWindowWidth, ConnListWindowHeight), ImGuiCond_Once);
-        ImGui::Begin("Server Connections");
-        // Have to make a vector of strings to pass to the ListBox function
-        // Because it requires a pointer to the stuff to write onto the screen >:(
-        std::vector<std::string> connInfoStrings; // Creating this every single frame is not very efficient, but its not really a problem
-        this->connectionsMutex.lock(); // Make sure the connections arent being modified while the connInfoStrings are being assembled
-        for(auto &c : this->connections){
-            connInfoStrings.push_back(c->username + "@" + c->hostname + " (" + c->publicIp + ") on socket " + std::to_string(c->sockFd));
-        }
-        this->connectionsMutex.unlock();
-        if(connInfoStrings.size() == 0){
-            connInfoStrings.push_back("No connections"); // This prevents the listbox from looking weird when there are no connections
-        }
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth());
-        ImGui::ListBox("##Connections", 
-                       &this->selectedConnection, 
-                       [](void* data, int idx, const char** out_text){
-                            std::vector<std::string>* connInfoStrings = (std::vector<std::string>*)data; // Cast the void* to an std::vector<std::string>*
-                            *out_text = connInfoStrings->at(idx).c_str(); // Get a pointer to the string at the current index (idx)
-                            return true;
-                       },
-                       (void*)&connInfoStrings, // This is the void* data variable of the lambda function
-                       connInfoStrings.size(),
-                       connInfoStrings.size()
-        );
-        ImGui::End();
-
-        // Draw the log window
-        this->servLog.draw();
     }
 
     void update(){ // Called every frame
