@@ -48,9 +48,10 @@ public:
 
     void add(std::string m){
         std::string this_id = std::to_string(std::hash<std::thread::id>()(std::this_thread::get_id())); // wacky copilot code
-        m = "[THREAD ID: " + this_id + "] (" + getTime() + ") " + m; // Add the thread id and time to the message
         this->logMutex.lock();
         this->logMessages.push_back(m);
+        // Add more extra info to the message that gets put on disk:
+        m = "[THREAD ID: " + this_id + "] (" + getTime() + ") " + m;
         if(this->writeToFile){
             std::ofstream logFile(this->logFile, std::ios::app);
             logFile << m << std::endl;
