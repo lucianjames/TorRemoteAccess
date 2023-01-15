@@ -223,6 +223,31 @@ private:
         }
         this->connectionsMutex.unlock();
     }
+    
+    /*
+        Displays some info about commands and stuff
+    */
+    void drawHelp(float windowWidthStartPercent,
+                  float windowHeightStartPercent,
+                  float windowWidthEndPercent,
+                  float windowHeightEndPercent,
+                  ImGuiCond condition=ImGuiCond_Always){
+        unsigned int menuWindowStartX = windowWidthStartPercent * ImGui::GetIO().DisplaySize.x;
+        unsigned int menuWindowStartY = windowHeightStartPercent * ImGui::GetIO().DisplaySize.y;
+        unsigned int menuWindowWidth = (windowWidthEndPercent * ImGui::GetIO().DisplaySize.x) - menuWindowStartX;
+        unsigned int menuWindowHeight = (windowHeightEndPercent * ImGui::GetIO().DisplaySize.y) - menuWindowStartY;
+        ImGui::SetNextWindowPos(ImVec2(menuWindowStartX, menuWindowStartY), condition);
+        ImGui::SetNextWindowSize(ImVec2(menuWindowWidth, menuWindowHeight), condition);
+        ImGui::Begin("Info");
+        ImGui::TextWrapped("All commands that would be available on a typical windows terminal are available, but there are some extra commands:");
+        ImGui::TextWrapped("grab <path> - Grabs a file from the client and saves it to the server at the current directory");
+        ImGui::TextWrapped("upload <path> - Uploads a file from the server to the client at the current directory of the client program");
+        ImGui::TextWrapped("clear - Clears the terminal window");
+        ImGui::Dummy(ImVec2(0, 1));
+        ImGui::TextWrapped("You will also find that a few commands also have linux-like aliases (ls -> dir, rm -> del, etc.)");
+        ImGui::TextWrapped("Press the escape key to cleanly exit the program");
+        ImGui::End();
+    }
 
 
 
@@ -280,7 +305,8 @@ public:
             }
         }
         this->connectionsMutex.unlock();
-        this->servLog.draw(0, 0.86, 1, 1, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
+        this->servLog.draw(0, 0.86, 0.75, 1, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
+        this->drawHelp(0.76, 0.86, 1, 1, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
     }
 
     /*
