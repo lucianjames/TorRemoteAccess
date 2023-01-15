@@ -1,7 +1,7 @@
 # TorRemoteAccess
 !! VERY WORK IN PROGRESS !!
 
-![ss](https://user-images.githubusercontent.com/65134690/211945869-b4941af7-003a-464c-b8f2-6ae78f4fbc84.png)
+![image](https://user-images.githubusercontent.com/65134690/212556242-96c63b4e-0faa-4404-8ef9-35898eb66ac3.png)
 
 # Setup
 ## Compiling the server
