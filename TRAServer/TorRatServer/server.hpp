@@ -115,12 +115,17 @@ private:
     /*
         Draws a menu that can be used to control a few different things
     */
-    void drawMenu(){
-        // Draw the menu window
-        unsigned int MenuWindowWidth = 35;
-        unsigned int MenuWindowHeight = 20;
-        ImGui::SetNextWindowPos(ImVec2(0, 15), ImGuiCond_Once);
-        ImGui::SetNextWindowSize(ImVec2(MenuWindowWidth, MenuWindowHeight), ImGuiCond_Once);
+    void drawMenu(float windowWidthStartPercent,
+                  float windowHeightStartPercent,
+                  float windowWidthEndPercent,
+                  float windowHeightEndPercent,
+                  ImGuiCond condition=ImGuiCond_Always){
+        unsigned int menuWindowStartX = windowWidthStartPercent * ImGui::GetIO().DisplaySize.x;
+        unsigned int menuWindowStartY = windowHeightStartPercent * ImGui::GetIO().DisplaySize.y;
+        unsigned int menuWindowWidth = (windowWidthEndPercent * ImGui::GetIO().DisplaySize.x) - menuWindowStartX;
+        unsigned int menuWindowHeight = (windowHeightEndPercent * ImGui::GetIO().DisplaySize.y) - menuWindowStartY;
+        ImGui::SetNextWindowPos(ImVec2(menuWindowStartX, menuWindowStartY), condition);
+        ImGui::SetNextWindowSize(ImVec2(menuWindowWidth, menuWindowHeight), condition);
         ImGui::Begin("Server Menu");
 
         // Log clearing buttons
@@ -160,12 +165,17 @@ private:
     /*
         Draws connections list
     */
-    void drawConnectionsList(){
-        // Draw the list of connections window
-        unsigned int ConnListWindowWidth = 100;
-        unsigned int ConnListWindowHeight = 10;
-        ImGui::SetNextWindowPos(ImVec2((ImGui::GetIO().DisplaySize.x/2)-(ConnListWindowWidth/2), 0), ImGuiCond_Once);
-        ImGui::SetNextWindowSize(ImVec2(ConnListWindowWidth, ConnListWindowHeight), ImGuiCond_Once);
+    void drawConnectionsList(float windowWidthStartPercent,
+                             float windowHeightStartPercent,
+                             float windowWidthEndPercent,
+                             float windowHeightEndPercent,
+                             ImGuiCond condition=ImGuiCond_Always){
+        unsigned int menuWindowStartX = windowWidthStartPercent * ImGui::GetIO().DisplaySize.x;
+        unsigned int menuWindowStartY = windowHeightStartPercent * ImGui::GetIO().DisplaySize.y;
+        unsigned int menuWindowWidth = (windowWidthEndPercent * ImGui::GetIO().DisplaySize.x) - menuWindowStartX;
+        unsigned int menuWindowHeight = (windowHeightEndPercent * ImGui::GetIO().DisplaySize.y) - menuWindowStartY;
+        ImGui::SetNextWindowPos(ImVec2(menuWindowStartX, menuWindowStartY), condition);
+        ImGui::SetNextWindowSize(ImVec2(menuWindowWidth, menuWindowHeight), condition);
         ImGui::Begin("Server Connections");
         // Have to make a vector of strings to pass to the ListBox function
         // Because it requires a pointer to the stuff to write onto the screen >:(
@@ -256,12 +266,19 @@ public:
     }
 
     void draw(){
-        this->drawMenu();
-        this->drawConnectionsList(); // Draws the list of active connections
-        this->servLog.draw(); // Draw the server log
+        this->drawMenu(0, 0, 0.3, 0.3); // Draw the menu
+        this->drawConnectionsList(0.31, 0, 1.0, 0.3); // Draw the connections list
         if(this->debugEnabled){ // If debugging is enabled, draw a window which shows a little bit of info about the server
             this->drawDebugInfo();
         }
+        this->connectionsMutex.lock();
+        for(int i=0; i<this->connections.size(); i++){
+            if(this->connections[i]->terminalActive){
+                this->connections[i]->draw(0, 0.31, 1, 0.85);
+            }
+        }
+        this->connectionsMutex.unlock();
+        this->servLog.draw(0, 0.86, 1, 1);
     }
 
     void update(){ // Called every frame

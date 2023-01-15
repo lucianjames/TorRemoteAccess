@@ -41,73 +41,6 @@ private:
     }
 
     /*
-        Draws the terminal window
-        Consists of a scrolling text box and an input box which sends the message when enter is pressed
-        The input box is set to always have keyboard focus
-    */
-    void drawTerminalWindow(){
-        unsigned int windowWidth = 50;
-        unsigned int windowHeight = 25;
-        
-        // Configure and create window:
-        ImGui::SetNextWindowPos(ImVec2((ImGui::GetIO().DisplaySize.x/2)-(windowWidth/2), (ImGui::GetIO().DisplaySize.y/2)-(windowHeight/2)), ImGuiCond_Once);
-        ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight), ImGuiCond_Once);
-        ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " terminal").c_str());
-
-        // Draw the scrolling text box, adding each item from this->plainTextMessageHistory:
-        ImGui::BeginChild("Scrolling", ImVec2(0, -2), false);
-        for(auto m : this->plainTextMessageHistory){
-            ImGui::TextWrapped("%s", m.c_str());
-        }
-        if(ImGui::GetScrollY() >= ImGui::GetScrollMaxY()){ // If the window is scrolled to the bottom, scroll down automatically when new text is added
-            ImGui::SetScrollHereY(1.0f);
-        }
-        ImGui::EndChild();
-
-        // If up/down key pressed, then set the input buffer to the appropriate command from the history
-        if(ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_UpArrow)) || ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_DownArrow))){
-            // Adjust history selection position
-            bool isUp = ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_UpArrow));
-            if(isUp && this->cmdHistSelected < this->commandHistory.size()){
-                this->cmdHistSelected++;
-            }else if(!isUp && this->cmdHistSelected > 0){
-                this->cmdHistSelected--;
-            }
-            // Insert history msg into input buff
-            if(this->commandHistory.size() > 0 && this->cmdHistSelected != 0){
-                ImGui::ClearActiveID();
-                memset(this->inputBuffer, 0, this->inputBufferSize);
-                strcpy(this->inputBuffer, this->commandHistory[this->commandHistory.size()-this->cmdHistSelected].c_str());
-                ImGui::SetKeyboardFocusHere();
-            }
-            // Clear the buffer if scrolling back down to 0
-            if(this->cmdHistSelected == 0){
-                ImGui::ClearActiveID();
-                memset(this->inputBuffer, 0 , this->inputBufferSize);
-                ImGui::SetKeyboardFocusHere();
-            }
-        }
-
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth());
-        if(ImGui::InputText("##Input", this->inputBuffer, this->inputBufferSize, ImGuiInputTextFlags_EnterReturnsTrue)){ // If enter is pressed, then set this->msgToSend to the contents of the input buffer
-            this->msgToSend = std::string(this->inputBuffer); // this->msgToSend will be processed when this->update() is called
-            if(this->msgToSend != ""){
-                this->commandHistory.push_back(this->msgToSend);
-                this->cmdHistSelected = 0;
-                memset(this->inputBuffer, 0, this->inputBufferSize); // Clear the input buffer
-            }
-        }
-
-        // Set the keyboard focus to the input box (as long as its not being used for something else):
-        if(!ImGui::IsAnyItemActive() && !ImGui::IsMouseClicked(0)){
-            ImGui::SetKeyboardFocusHere();
-        }
-
-        ImGui::End();
-    }
-
-
-    /*
         Parses the given command and calls the appropriate function
     */
     void parseSendCmd(std::string cmd){
@@ -424,6 +357,75 @@ public:
         this->sockFdMutex.unlock();
     }
 
+    /*
+        Draws the terminal window
+        Consists of a scrolling text box and an input box which sends the message when enter is pressed
+        The input box is set to always have keyboard focus
+    */
+    void draw(float windowWidthStartPercent,
+              float windowHeightStartPercent,
+              float windowWidthEndPercent,
+              float windowHeightEndPercent,
+              ImGuiCond condition=ImGuiCond_Always){
+        unsigned int menuWindowStartX = windowWidthStartPercent * ImGui::GetIO().DisplaySize.x;
+        unsigned int menuWindowStartY = windowHeightStartPercent * ImGui::GetIO().DisplaySize.y;
+        unsigned int menuWindowWidth = (windowWidthEndPercent * ImGui::GetIO().DisplaySize.x) - menuWindowStartX;
+        unsigned int menuWindowHeight = (windowHeightEndPercent * ImGui::GetIO().DisplaySize.y) - menuWindowStartY;
+        ImGui::SetNextWindowPos(ImVec2(menuWindowStartX, menuWindowStartY), condition);
+        ImGui::SetNextWindowSize(ImVec2(menuWindowWidth, menuWindowHeight), condition);
+        ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " terminal").c_str());
+
+        // Draw the scrolling text box, adding each item from this->plainTextMessageHistory:
+        ImGui::BeginChild("Scrolling", ImVec2(0, -2), false);
+        for(auto m : this->plainTextMessageHistory){
+            ImGui::TextWrapped("%s", m.c_str());
+        }
+        if(ImGui::GetScrollY() >= ImGui::GetScrollMaxY()){ // If the window is scrolled to the bottom, scroll down automatically when new text is added
+            ImGui::SetScrollHereY(1.0f);
+        }
+        ImGui::EndChild();
+
+        // If up/down key pressed, then set the input buffer to the appropriate command from the history
+        if(ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_UpArrow)) || ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_DownArrow))){
+            // Adjust history selection position
+            bool isUp = ImGui::IsKeyReleased(ImGui::GetKeyIndex(ImGuiKey_UpArrow));
+            if(isUp && this->cmdHistSelected < this->commandHistory.size()){
+                this->cmdHistSelected++;
+            }else if(!isUp && this->cmdHistSelected > 0){
+                this->cmdHistSelected--;
+            }
+            // Insert history msg into input buff
+            if(this->commandHistory.size() > 0 && this->cmdHistSelected != 0){
+                ImGui::ClearActiveID();
+                memset(this->inputBuffer, 0, this->inputBufferSize);
+                strcpy(this->inputBuffer, this->commandHistory[this->commandHistory.size()-this->cmdHistSelected].c_str());
+                ImGui::SetKeyboardFocusHere();
+            }
+            // Clear the buffer if scrolling back down to 0
+            if(this->cmdHistSelected == 0){
+                ImGui::ClearActiveID();
+                memset(this->inputBuffer, 0 , this->inputBufferSize);
+                ImGui::SetKeyboardFocusHere();
+            }
+        }
+
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth());
+        if(ImGui::InputText("##Input", this->inputBuffer, this->inputBufferSize, ImGuiInputTextFlags_EnterReturnsTrue)){ // If enter is pressed, then set this->msgToSend to the contents of the input buffer
+            this->msgToSend = std::string(this->inputBuffer); // this->msgToSend will be processed when this->update() is called
+            if(this->msgToSend != ""){
+                this->commandHistory.push_back(this->msgToSend);
+                this->cmdHistSelected = 0;
+                memset(this->inputBuffer, 0, this->inputBufferSize); // Clear the input buffer
+            }
+        }
+
+        // Set the keyboard focus to the input box (as long as its not being used for something else):
+        if(!ImGui::IsAnyItemActive() && !ImGui::IsMouseClicked(0)){
+            ImGui::SetKeyboardFocusHere();
+        }
+
+        ImGui::End();
+    }
 
     /*
         Handles the initial connection with the client
@@ -481,11 +483,6 @@ public:
         Also processes any commands that need to be sent
     */
     void update(){
-        // If the terminal is active, then draw its window:
-        if(this->terminalActive){
-            this->drawTerminalWindow();
-        }
-
         // If this->msgToSend is not empty, then there is a command that needs to be processed:
         if(this->msgToSend != ""){
             this->parseSendCmd(this->msgToSend);

@@ -60,10 +60,17 @@ public:
         this->logMutex.unlock();
     }
 
-    void draw(){
-        // Set up the window
-        ImGui::SetNextWindowPos(ImVec2((ImGui::GetIO().DisplaySize.x/2)-(windowWidth/2), (ImGui::GetIO().DisplaySize.y/2)-(windowHeight/2)), ImGuiCond_Once);
-        ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight), ImGuiCond_Once);
+    void draw(float windowWidthStartPercent,
+              float windowHeightStartPercent,
+              float windowWidthEndPercent,
+              float windowHeightEndPercent,
+              ImGuiCond condition=ImGuiCond_Always){
+        unsigned int menuWindowStartX = windowWidthStartPercent * ImGui::GetIO().DisplaySize.x;
+        unsigned int menuWindowStartY = windowHeightStartPercent * ImGui::GetIO().DisplaySize.y;
+        unsigned int menuWindowWidth = (windowWidthEndPercent * ImGui::GetIO().DisplaySize.x) - menuWindowStartX;
+        unsigned int menuWindowHeight = (windowHeightEndPercent * ImGui::GetIO().DisplaySize.y) - menuWindowStartY;
+        ImGui::SetNextWindowPos(ImVec2(menuWindowStartX, menuWindowStartY), condition);
+        ImGui::SetNextWindowSize(ImVec2(menuWindowWidth, menuWindowHeight), condition);
         ImGui::Begin(title.c_str());
 
         // Draw the scrolling text box, adding each item from this->logMessages:
