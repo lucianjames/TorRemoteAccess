@@ -25,8 +25,9 @@ private:
     unsigned long int n_conn = 0; // For debugging purposes
     int connectivityCheckIntervalSeconds = 10; // Interval between connectivity checks
     logWindow servLog; // Log window for the server
+    bool checkConnectivity = false; // If true, the server will check the connectivity of all connections every connectivityCheckIntervalSeconds seconds
     bool debugEnabled = false;
-    bool checkConnectivity = true; // If true, the server will check the connectivity of all connections every connectivityCheckIntervalSeconds seconds
+    bool fixedLayout = true;
 
     /*
         Function that the listener thread runs
@@ -111,7 +112,6 @@ private:
         }
     }
 
-
     /*
         Draws a menu that can be used to control a few different things
     */
@@ -127,7 +127,6 @@ private:
         ImGui::SetNextWindowPos(ImVec2(menuWindowStartX, menuWindowStartY), condition);
         ImGui::SetNextWindowSize(ImVec2(menuWindowWidth, menuWindowHeight), condition);
         ImGui::Begin("Server Menu");
-
         // Log clearing buttons
         ImGui::Dummy(ImVec2(0, 1));
         if(ImGui::Button("Clear log")){
@@ -137,28 +136,32 @@ private:
         if(ImGui::Button("Clear log file")){
             this->servLog.clearFile();
         }
-
+        // Fixed layout checkbox
+        ImGui::Dummy(ImVec2(0, 1));
+        ImGui::Checkbox("Fixed layout", &this->fixedLayout);
         // Debug checkbox
         ImGui::Dummy(ImVec2(0, 1));
         ImGui::Checkbox("Extra debug windows", &this->debugEnabled);
-
         // Connectivity check checkbox and interval input
         ImGui::Dummy(ImVec2(0, 1));
-        ImGui::Text("Connectivity check interval (s)");
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth()-1.0f);
-        ImGui::InputInt("##Connectivity check interval (s)", &this->connectivityCheckIntervalSeconds);
-        if(this->connectivityCheckIntervalSeconds < 1){ // Will segfault if tries to check every 0 seconds
-            this->connectivityCheckIntervalSeconds = 1;
+        ImGui::Checkbox("Auto conn check", &this->checkConnectivity);
+        if(this->checkConnectivity){
+            ImGui::Text("Conn check interval (s)");
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth()-1.0f);
+            ImGui::InputInt("##Connectivity check interval (s)", &this->connectivityCheckIntervalSeconds);
+            if(this->connectivityCheckIntervalSeconds < 1){ // Will segfault if tries to check every 0 seconds
+                this->connectivityCheckIntervalSeconds = 1;
+            }
         }
-        ImGui::Checkbox("Enable auto connectivity check", &this->checkConnectivity);
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-        ImGui::TextWrapped("WARN: Checking connections may freeze the interface for a bit");
+        ImGui::PushTextWrapPos(ImGui::GetContentRegionAvailWidth()-1.0f);
+        ImGui::TextWrapped("WARN: Connections check may freeze the interface for a second or two");
         ImGui::PopStyleColor();
+        ImGui::PopTextWrapPos();
         // Manual connectivity check button
         if(ImGui::Button("Check connections now")){
             this->connectivityCheckOnce();
         }
-
         ImGui::End();
     }
 
@@ -222,6 +225,7 @@ private:
     }
 
 
+
 public:
 
     /*
@@ -235,7 +239,6 @@ public:
         if ((this->serverListenerFd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
             perror_exit("server::server() - ERR: socket() failed");
         }
-        
         // Set up the socket options
         if (setsockopt(this->serverListenerFd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &this->opt, sizeof(this->opt))) {
             perror_exit("server::server() - ERR: setsockopt() failed");
@@ -243,44 +246,46 @@ public:
         this->address.sin_family = AF_INET;
         this->address.sin_addr.s_addr = INADDR_ANY;
         this->address.sin_port = htons(port);
-
         // Bind the socket to the address we just set up
         if (bind(this->serverListenerFd, (struct sockaddr *)&this->address, sizeof(this->address))<0) {
             perror_exit("server::server() - ERR: bind() failed");
         }
-
         // Make the socket listen for connectoins
         if (listen(this->serverListenerFd, 3) < 0) { // 3 is the maximum number of pending connections, any more and the client will get a "Connection refused" error
             perror_exit("server::server() - ERR: listen() failed");
         }
-
         // Start up the thread that listens for and sets up connections
         this->servLog.add("server::server() - INFO: Starting listener thread");
         std::thread listenerThread(&server::listenerThreadFunction, this);
         listenerThread.detach(); // Detaching the thread so it doesn't need to be joined
-
         // Start the thread which loops over every established connection (which doesnt have an active terminal) and checks if its still alive
         this->servLog.add("server::server() - INFO: Starting connectivity check thread");
         std::thread connectivityCheckThread(&server::connectivityCheckThreadFunction, this);
         connectivityCheckThread.detach();
     }
 
+    /*
+        Draws all the windows!
+    */
     void draw(){
-        this->drawMenu(0, 0, 0.3, 0.3); // Draw the menu
-        this->drawConnectionsList(0.31, 0, 1.0, 0.3); // Draw the connections list
-        if(this->debugEnabled){ // If debugging is enabled, draw a window which shows a little bit of info about the server
+        this->drawMenu(0, 0, 0.3, 0.3, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
+        this->drawConnectionsList(0.31, 0, 1.0, 0.3, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
+        if(this->debugEnabled){
             this->drawDebugInfo();
         }
         this->connectionsMutex.lock();
         for(int i=0; i<this->connections.size(); i++){
             if(this->connections[i]->terminalActive){
-                this->connections[i]->draw(0, 0.31, 1, 0.85);
+                this->connections[i]->draw(0, 0.31, 1, 0.85, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
             }
         }
         this->connectionsMutex.unlock();
-        this->servLog.draw(0, 0.86, 1, 1);
+        this->servLog.draw(0, 0.86, 1, 1, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
     }
 
+    /*
+        Updates all the connections
+    */
     void update(){ // Called every frame
         this->connectionsMutex.lock(); // Lock the connections vector so no other thread can modify it while we are updating
         for(int i=0; i<this->connections.size(); i++){ // For every connection.....
