@@ -67,48 +67,6 @@ private:
     }
 
     /*
-        Function that the connectivity checking thread runs
-        Checks if the connections are still connected by sending a ping to them
-        (Hopefully) thread safe via the connectionsMutex :D
-    */
-    void connectivityCheckThreadFunction(){
-        while(true){
-            std::this_thread::sleep_for(std::chrono::seconds(connectivityCheckIntervalSeconds));
-            if(!this->checkConnectivity){ // If checkConnectivity is false, dont check the connectivity of the connections
-                continue;
-            }
-            this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Checking connections...");
-            this->connectionsMutex.lock();
-            // Iterate over every connection, delete it from the vector if connectivityCheck() returns false
-            for(int i = 0; i < this->connections.size(); i++){
-                this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Checking connection " + std::to_string(i));
-                // Under extreme stress-test conditions, the connections vector can contain NULL pointers (not sure how)
-                if(this->connections[i] == NULL){ // This is a hack to prevent a segfault
-                    this->servLog.add("server::connectivityCheckThreadFunction() - WARN: NULL pointer in connections vector, deleting");
-                    this->connections.erase(this->connections.begin() + i);
-                    i--;
-                    continue;
-                }
-                if(this->connections[i]->terminalActive){ // Dont send a ping to the connection if its terminal is active
-                    this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Skipping " + std::to_string(i) + " because terminal is active");
-                    continue;
-                }
-                if(!this->connections[i]->connectivityCheck()){ // If the connectivity check fails, delete the connection
-                    this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Deleting connection " + std::to_string(i) + " (failed to respond to ping)");
-                    this->connections.erase(this->connections.begin() + i);
-                    if(this->selectedConnection > i){ // So we dont mess up whats currently selected in the UI
-                        this->selectedConnection--;
-                    }
-                    i--;
-                    continue;
-                }
-                this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Received valid response from " + std::to_string(i));
-            }
-            this->connectionsMutex.unlock();
-        }
-    }
-
-    /*
         Used to check connectivity just once, runs in the main thread
         Does not ignore active terminals
     */
@@ -136,6 +94,23 @@ private:
         }
         this->connectionsMutex.unlock();
     }
+
+    /*
+        Function that the connectivity checking thread runs
+        Checks if the connections are still connected by sending a ping to them
+        (Hopefully) thread safe via the connectionsMutex :D
+    */
+    void connectivityCheckThreadFunction(){
+        while(true){
+            std::this_thread::sleep_for(std::chrono::seconds(connectivityCheckIntervalSeconds));
+            if(!this->checkConnectivity){ // If checkConnectivity is false, dont check the connectivity of the connections
+                continue;
+            }
+            this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Checking connections via connectivityCheckOnce()");
+            this->connectivityCheckOnce();
+        }
+    }
+
 
     /*
         Draws a menu that can be used to control a few different things
@@ -172,7 +147,7 @@ private:
         }
         ImGui::Checkbox("Enable auto connectivity check", &this->checkConnectivity);
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-        ImGui::TextWrapped("Note: Only checks connections that are not currently in use. Use the button below to run a single check on all connections.");
+        ImGui::TextWrapped("WARN: Checking connections may freeze the interface for a bit");
         ImGui::PopStyleColor();
         // Manual connectivity check button
         if(ImGui::Button("Check connections now")){
