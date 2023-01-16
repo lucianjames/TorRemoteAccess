@@ -7,6 +7,7 @@
 
 #include "connection.hpp"
 #include "logWindow.hpp"
+#include "uiHelper.hpp"
 
 #define perror_exit(msg) perror(msg); exit(EXIT_FAILURE);
 
@@ -115,17 +116,16 @@ private:
     /*
         Draws a menu that can be used to control a few different things
     */
-    void drawMenu(float windowWidthStartPercent,
-                  float windowHeightStartPercent,
-                  float windowWidthEndPercent,
-                  float windowHeightEndPercent,
+    void drawMenu(float wWidthStartPercent,
+                  float wHeightStartPercent,
+                  float wWidthEndPercent,
+                  float wHeightEndPercent,
                   ImGuiCond condition=ImGuiCond_Always){
-        unsigned int menuWindowStartX = windowWidthStartPercent * ImGui::GetIO().DisplaySize.x;
-        unsigned int menuWindowStartY = windowHeightStartPercent * ImGui::GetIO().DisplaySize.y;
-        unsigned int menuWindowWidth = (windowWidthEndPercent * ImGui::GetIO().DisplaySize.x) - menuWindowStartX;
-        unsigned int menuWindowHeight = (windowHeightEndPercent * ImGui::GetIO().DisplaySize.y) - menuWindowStartY;
-        ImGui::SetNextWindowPos(ImVec2(menuWindowStartX, menuWindowStartY), condition);
-        ImGui::SetNextWindowSize(ImVec2(menuWindowWidth, menuWindowHeight), condition);
+        uiHelper::configNextWinPosSizePercent(wWidthStartPercent,
+                                              wHeightStartPercent,
+                                              wWidthEndPercent,
+                                              wHeightEndPercent,
+                                              condition);
         ImGui::Begin("Server Menu");
         // Log clearing buttons
         ImGui::Dummy(ImVec2(0, 1));
@@ -168,17 +168,16 @@ private:
     /*
         Draws connections list
     */
-    void drawConnectionsList(float windowWidthStartPercent,
-                             float windowHeightStartPercent,
-                             float windowWidthEndPercent,
-                             float windowHeightEndPercent,
+    void drawConnectionsList(float wWidthStartPercent,
+                             float wHeightStartPercent,
+                             float wWidthEndPercent,
+                             float wHeightEndPercent,
                              ImGuiCond condition=ImGuiCond_Always){
-        unsigned int menuWindowStartX = windowWidthStartPercent * ImGui::GetIO().DisplaySize.x;
-        unsigned int menuWindowStartY = windowHeightStartPercent * ImGui::GetIO().DisplaySize.y;
-        unsigned int menuWindowWidth = (windowWidthEndPercent * ImGui::GetIO().DisplaySize.x) - menuWindowStartX;
-        unsigned int menuWindowHeight = (windowHeightEndPercent * ImGui::GetIO().DisplaySize.y) - menuWindowStartY;
-        ImGui::SetNextWindowPos(ImVec2(menuWindowStartX, menuWindowStartY), condition);
-        ImGui::SetNextWindowSize(ImVec2(menuWindowWidth, menuWindowHeight), condition);
+        uiHelper::configNextWinPosSizePercent(wWidthStartPercent,
+                                              wHeightStartPercent,
+                                              wWidthEndPercent,
+                                              wHeightEndPercent,
+                                              condition);
         ImGui::Begin("Server Connections");
         // Have to make a vector of strings to pass to the ListBox function
         // Because it requires a pointer to the stuff to write onto the screen >:(
@@ -227,17 +226,16 @@ private:
     /*
         Displays some info about commands and stuff
     */
-    void drawHelp(float windowWidthStartPercent,
-                  float windowHeightStartPercent,
-                  float windowWidthEndPercent,
-                  float windowHeightEndPercent,
+    void drawHelp(float wWidthStartPercent,
+                  float wHeightStartPercent,
+                  float wWidthEndPercent,
+                  float wHeightEndPercent,
                   ImGuiCond condition=ImGuiCond_Always){
-        unsigned int menuWindowStartX = windowWidthStartPercent * ImGui::GetIO().DisplaySize.x;
-        unsigned int menuWindowStartY = windowHeightStartPercent * ImGui::GetIO().DisplaySize.y;
-        unsigned int menuWindowWidth = (windowWidthEndPercent * ImGui::GetIO().DisplaySize.x) - menuWindowStartX;
-        unsigned int menuWindowHeight = (windowHeightEndPercent * ImGui::GetIO().DisplaySize.y) - menuWindowStartY;
-        ImGui::SetNextWindowPos(ImVec2(menuWindowStartX, menuWindowStartY), condition);
-        ImGui::SetNextWindowSize(ImVec2(menuWindowWidth, menuWindowHeight), condition);
+        uiHelper::configNextWinPosSizePercent(wWidthStartPercent,
+                                              wHeightStartPercent,
+                                              wWidthEndPercent,
+                                              wHeightEndPercent,
+                                              condition);
         ImGui::Begin("Info");
         ImGui::TextWrapped("All commands that would be available on a typical windows terminal are available, but there are some extra commands:");
         ImGui::TextWrapped("grab <path> - Grabs a file from the client and saves it to the server at the current directory");

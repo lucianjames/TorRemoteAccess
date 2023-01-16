@@ -4,7 +4,10 @@
 #include <filesystem>
 #include <algorithm>
 
+#include "imtui/imtui.h"
+
 #include "logWindow.hpp"
+#include "uiHelper.hpp"
 
 /*
     Class for a connection to the server.
@@ -362,17 +365,16 @@ public:
         Consists of a scrolling text box and an input box which sends the message when enter is pressed
         The input box is set to always have keyboard focus
     */
-    void draw(float windowWidthStartPercent,
-              float windowHeightStartPercent,
-              float windowWidthEndPercent,
-              float windowHeightEndPercent,
+    void draw(float wWidthStartPercent,
+              float wHeightStartPercent,
+              float wWidthEndPercent,
+              float wHeightEndPercent,
               ImGuiCond condition=ImGuiCond_Always){
-        unsigned int menuWindowStartX = windowWidthStartPercent * ImGui::GetIO().DisplaySize.x;
-        unsigned int menuWindowStartY = windowHeightStartPercent * ImGui::GetIO().DisplaySize.y;
-        unsigned int menuWindowWidth = (windowWidthEndPercent * ImGui::GetIO().DisplaySize.x) - menuWindowStartX;
-        unsigned int menuWindowHeight = (windowHeightEndPercent * ImGui::GetIO().DisplaySize.y) - menuWindowStartY;
-        ImGui::SetNextWindowPos(ImVec2(menuWindowStartX, menuWindowStartY), condition);
-        ImGui::SetNextWindowSize(ImVec2(menuWindowWidth, menuWindowHeight), condition);
+        uiHelper::configNextWinPosSizePercent(wWidthStartPercent,
+                                              wHeightStartPercent,
+                                              wWidthEndPercent,
+                                              wHeightEndPercent,
+                                              condition);
         ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " terminal").c_str());
 
         // Draw the scrolling text box, adding each item from this->plainTextMessageHistory:

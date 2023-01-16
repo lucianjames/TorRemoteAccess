@@ -1,7 +1,5 @@
 #pragma once
 
-#include "imtui/imtui.h"
-
 #include <ctime>
 #include <chrono>
 #include <fstream>
@@ -9,6 +7,10 @@
 #include <string>
 #include <vector>
 #include <thread>
+
+#include "imtui/imtui.h"
+
+#include "uiHelper.hpp"
 
 
 class logWindow{
@@ -60,17 +62,16 @@ public:
         this->logMutex.unlock();
     }
 
-    void draw(float windowWidthStartPercent,
-              float windowHeightStartPercent,
-              float windowWidthEndPercent,
-              float windowHeightEndPercent,
+    void draw(float wWidthStartPercent,
+              float wHeightStartPercent,
+              float wWidthEndPercent,
+              float wHeightEndPercent,
               ImGuiCond condition=ImGuiCond_Always){
-        unsigned int menuWindowStartX = windowWidthStartPercent * ImGui::GetIO().DisplaySize.x;
-        unsigned int menuWindowStartY = windowHeightStartPercent * ImGui::GetIO().DisplaySize.y;
-        unsigned int menuWindowWidth = (windowWidthEndPercent * ImGui::GetIO().DisplaySize.x) - menuWindowStartX;
-        unsigned int menuWindowHeight = (windowHeightEndPercent * ImGui::GetIO().DisplaySize.y) - menuWindowStartY;
-        ImGui::SetNextWindowPos(ImVec2(menuWindowStartX, menuWindowStartY), condition);
-        ImGui::SetNextWindowSize(ImVec2(menuWindowWidth, menuWindowHeight), condition);
+        uiHelper::configNextWinPosSizePercent(wWidthStartPercent,
+                                              wHeightStartPercent,
+                                              wWidthEndPercent,
+                                              wHeightEndPercent,
+                                              condition);
         ImGui::Begin(title.c_str());
 
         // Draw the scrolling text box, adding each item from this->logMessages:
