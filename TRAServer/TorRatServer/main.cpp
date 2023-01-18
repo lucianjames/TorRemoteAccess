@@ -3,11 +3,17 @@
 #include "imtui/imtui.h"
 #include "imtui/imtui-impl-ncurses.h"
 
+#include "checkTor.hpp"
 #include "server.hpp"
 
 #define serverPort 52727
 
 int main() {
+    if(!torRunning()){
+        printf("Tor is not running! Please start tor before running this program.\n(Failed to connect to 127.0.0.1:9050)\n");
+        return 1;
+    }
+
     // Make all threads ignore SIGPIPE
     // This is so that if a connection is closed, the program doesn't crash
     signal(SIGPIPE, SIG_IGN);
