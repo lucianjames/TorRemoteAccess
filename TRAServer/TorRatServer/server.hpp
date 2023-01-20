@@ -16,100 +16,103 @@
 */
 class server{
 private:
+    std::vector<std::unique_ptr<connection>> connections;
+    std::mutex connectionsMutex; // To ensure connections vect isnt modified by two threads at once
+
     int serverListenerFd; // Socket file descriptor for the server to listen for new connections on
-    struct sockaddr_in address; // Address of the server
-    int opt = 1; // Used for setsockopt
-    std::vector<std::unique_ptr<connection>> connections; // Vector of connections to the server
-    std::mutex connectionsMutex; // Mutex for the connections vector
+    struct sockaddr_in listenerAddress; // Used to configure the listening socket
+    int listenerOpt = 1; // Used for setsockopt
     unsigned int maxConnections; // Maximum number of connections to the server
-    int selectedConnection = 0; // Index of the selected connection in the connections vector
-    unsigned long int n_conn = 0; // For debugging purposes
-    int connectivityCheckIntervalSeconds = 10; // Interval between connectivity checks
-    logWindow servLog; // Log window for the server
-    bool checkConnectivity = false; // If true, the server will check the connectivity of all connections every connectivityCheckIntervalSeconds seconds
+
     bool debugEnabled = false;
     bool fixedLayout = true;
+    bool checkConnectivity = false; // If true, the server will check the connectivity of all connections every connectivityCheckIntervalSeconds seconds
+    int connectivityCheckIntervalSeconds = 10; // Interval between connectivity checks
+
+    int selectedConnection = 0; // Index of the selected connection in the connections vector
+    unsigned long int n_conn = 0; // For debugging purposes
+    logWindow servLog; // Log window for the server
+
+    
 
     /*
         Function that the listener thread runs
-        Places new connections into the connections vector, does nothing else.
-        (Hopefully) thread safe via the connectionsMutex
+        Accepts new connections if this->connections.size < this->maxConnections
+        Runs the initialConnection() function on new connections before adding them to this->connections,
+        which verifies that the connection is valid.
+        This function will run forever (while(true))
     */
     void listenerThreadFunction(){
-        while(true){ // This thread goes until the program is closed
-            // Dont allow more than 10 connections:
-            if(this->connections.size() >= this->maxConnections){
-                std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Sleep for a bit to reduce CPU usage, helps prevent DOS kinda stuff from happening :)
-                continue; // Its been a whole 100ms, so lets go back to the top of the loop
+        while(true){
+            if(this->connections.size() < this->maxConnections){ // Only accept a new connection if the maximum connection count hasnt been reached
+                // Wait for a new connection:
+                this->servLog.add("server::listenerThreadFunction() - INFO: Waiting for new connection");
+                int newConnectionFd; // The file descriptor for the new connection, will be set by accept() then used to instantiate a new connection object
+                struct sockaddr_in newAddress;
+                int newAddrlen = sizeof(newAddress);
+                if((newConnectionFd = accept(this->serverListenerFd, (struct sockaddr *)&newAddress, (socklen_t*)&newAddrlen))<0){
+                    perror_exit("server::listenerThreadFunction() - ERR: accept() failed");
+                }
+                this->servLog.add("server::listenerThreadFunction() - INFO: New connection accepted");
+                this->n_conn++; // Increment the variable used to keep track of the number of connections
+
+                // Create a unique_ptr to a new connection object for the new connection
+                // A unique_ptr will automatically free when no longer used, very cool.
+                std::unique_ptr<connection> newConnection = std::make_unique<connection>(newConnectionFd, &this->servLog);
+
+                // Verify the connection using the intialConnection() function (part of the connection class)
+                this->servLog.add("server::listenerThreadFunction() - INFO: Verifying connection");
+                if(newConnection->intialConnection()){ // initialConnection returns true if all the right data is received from the client
+                    // Add the new connection to this->connections
+                    this->servLog.add("server::listenerThreadFunction() - INFO: Connection verified - adding to the list of connections");
+                    this->connectionsMutex.lock(); // Make sure this thread is the only one using the connections vector
+                    this->connections.push_back(std::move(newConnection)); // Move ownership of the unique_ptr<connection> to the connections vector
+                    this->connectionsMutex.unlock();
+                }else{
+                    this->servLog.add("server::listenerThreadFunction() - WARN: Connection failed verification, discarding");
+                }
+            }else{
+                // Sleep for a bit to reduce CPU usage.
+                // Not sleeping would result in the if statement being called a lot of times really fast
+                std::this_thread::sleep_for(std::chrono::milliseconds(100)); 
             }
-            // Set up the variables required to accept a new connection
-            int newConnectionFd; // The file descriptor for the new connection, will be set by accept() then used to instantiate a new connection object
-            struct sockaddr_in address;
-            int addrlen = sizeof(address);
-            // Wait for a new connection
-            this->servLog.add("server::listenerThreadFunction() - INFO: Waiting for new connection");
-            if ((newConnectionFd = accept(this->serverListenerFd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) {
-                perror_exit("server::listenerThreadFunction() - ERR: accept() failed");
-            }
-            this->servLog.add("server::listenerThreadFunction() - INFO: New connection accepted");
-            this->n_conn++; // Increment the variable used to keep track of the number of connections
-            // Create a unique_ptr to a new connection object for the new connection
-            std::unique_ptr<connection> newConnection = std::make_unique<connection>(newConnectionFd, &this->servLog);
-            // Verify the connection using the intialConnection() function (part of the connection class)
-            this->servLog.add("server::listenerThreadFunction() - INFO: Verifying connection");
-            if(!newConnection->intialConnection()){
-                this->servLog.add("server::listenerThreadFunction() - WARN: Connection failed verification, discarding");
-                continue; // If the connection failed, dont add it to the connections vector
-            }
-            this->servLog.add("server::listenerThreadFunction() - INFO: Connection verified - adding to the list of connections");
-            this->connectionsMutex.lock(); // Make sure this thread is the only one using the connections vector
-            this->connections.push_back(std::move(newConnection)); // Move ownership of the unique_ptr<connection> to the connections vector
-            this->connectionsMutex.unlock();
         }
     }
 
     /*
-        Used to check connectivity just once, runs in the main thread
-        Does not ignore active terminals
+        Used to check connectivity just once, does not ignore active terminals
     */
     void connectivityCheckOnce(){
         this->servLog.add("server::connectivityCheckOnce() - INFO: Checking connections...");
         this->connectionsMutex.lock();
-        for(int i = 0; i < this->connections.size(); i++){
+        for(int i=this->connections.size()-1; i>=0; i--){ // Iterating backwards so erasing items doesnt require decrementing the index
             this->servLog.add("server::connectivityCheckOnce() - INFO: Checking connection " + std::to_string(i));
-            if(this->connections[i] == NULL){ // This is a hack to prevent a segfault
-                this->servLog.add("server::connectivityCheckOnce() - WARN: NULL pointer in connections vector, deleting");
-                this->connections.erase(this->connections.begin() + i);
-                i--;
-                continue;
-            }
-            if(!this->connections[i]->connectivityCheck()){ // If the connectivity check fails, delete the connection
+            if(!this->connections[i]->connectivityCheck()){ // connectivityCheck returns true if the client is still connected and a valid response was received
                 this->servLog.add("server::connectivityCheckOnce() - INFO: Deleting connection " + std::to_string(i) + " (failed to respond to ping)");
                 this->connections.erase(this->connections.begin() + i);
-                if(this->selectedConnection > i){ // So we dont mess up whats currently selected in the UI
+                if(this->selectedConnection > i){ // Decrease selected connection if we remove something below the selected connection (makes it so selected terminal doesnt change wrong)
                     this->selectedConnection--;
                 }
-                i--;
-                continue;
+            }else{
+                this->servLog.add("server::connectivityCheckOnce() - INFO: Received valid response from " + std::to_string(i));
             }
-            this->servLog.add("server::connectivityCheckOnce() - INFO: Received valid response from " + std::to_string(i));
         }
         this->connectionsMutex.unlock();
     }
+    
 
     /*
         Function that the connectivity checking thread runs
         Checks if the connections are still connected by sending a ping to them
-        (Hopefully) thread safe via the connectionsMutex :D
+        This function runs forever (while(true))
     */
     void connectivityCheckThreadFunction(){
         while(true){
             std::this_thread::sleep_for(std::chrono::seconds(connectivityCheckIntervalSeconds));
-            if(!this->checkConnectivity){ // If checkConnectivity is false, dont check the connectivity of the connections
-                continue;
+            if(this->checkConnectivity){
+                this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Checking connections via connectivityCheckOnce()");
+                this->connectivityCheckOnce();
             }
-            this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Checking connections via connectivityCheckOnce()");
-            this->connectivityCheckOnce();
         }
     }
 
@@ -127,7 +130,8 @@ private:
                                               wHeightEndPercent,
                                               condition);
         ImGui::Begin("Server Menu");
-        // Log clearing buttons
+
+        // Log clearing buttons:
         ImGui::Dummy(ImVec2(0, 1));
         if(ImGui::Button("Clear log")){
             this->servLog.clear();
@@ -136,13 +140,16 @@ private:
         if(ImGui::Button("Clear log file")){
             this->servLog.clearFile();
         }
-        // Fixed layout checkbox
+
+        // Fixed layout checkbox:
         ImGui::Dummy(ImVec2(0, 1));
         ImGui::Checkbox("Fixed layout", &this->fixedLayout);
-        // Debug checkbox
+
+        // Debug checkbox:
         ImGui::Dummy(ImVec2(0, 1));
         ImGui::Checkbox("Extra debug windows", &this->debugEnabled);
-        // Connectivity check checkbox and interval input
+
+        // Connectivity check checkbox and interval input:
         ImGui::Dummy(ImVec2(0, 1));
         ImGui::Checkbox("Auto conn check", &this->checkConnectivity);
         if(this->checkConnectivity){
@@ -158,10 +165,12 @@ private:
         ImGui::TextWrapped("WARN: Connections check may freeze the interface for a second or two");
         ImGui::PopStyleColor();
         ImGui::PopTextWrapPos();
-        // Manual connectivity check button
+
+        // Manual connectivity check button:
         if(ImGui::Button("Check connections now")){
             this->connectivityCheckOnce();
         }
+
         ImGui::End();
     }
 
@@ -179,6 +188,7 @@ private:
                                               wHeightEndPercent,
                                               condition);
         ImGui::Begin("Server Connections");
+
         // Have to make a vector of strings to pass to the ListBox function
         // Because it requires a pointer to the stuff to write onto the screen >:(
         std::vector<std::string> connInfoStrings; // Creating this every single frame is not very efficient, but its not really a problem
@@ -190,6 +200,8 @@ private:
         if(connInfoStrings.size() == 0){
             connInfoStrings.push_back("No connections"); // This prevents the listbox from looking weird when there are no connections
         }
+
+        // Create a listbox with the strings that were just created:
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth());
         ImGui::ListBox("##Connections", 
                        &this->selectedConnection, 
@@ -202,6 +214,7 @@ private:
                        connInfoStrings.size(),
                        connInfoStrings.size()
         );
+
         ImGui::End();
     }
 
@@ -209,12 +222,14 @@ private:
         Draws debug info
     */
     void drawDebugInfo(){
+        // Draw a little bit of server debug info:
         ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
         ImGui::SetNextWindowSize(ImVec2(30, 4), ImGuiCond_Once);
         ImGui::Begin("Server Debug Window");
         ImGui::Text("Number of active connections: %d", this->connections.size());
         ImGui::Text("Number of connections since start: %d", this->n_conn);
         ImGui::End();
+
         // Also, draw the debugging windows built into each connection:
         this->connectionsMutex.lock(); // Lock the connections vector so no other thread can modify while debug windows are being drawn
         for(auto &c : this->connections){
@@ -258,30 +273,36 @@ public:
         this->servLog.setup("Server Log", true, "TRAServer.log");
         this->servLog.add("server::server() - INFO: Starting server");
         this->maxConnections = maxConnections;
-        // Creating the socket file descriptor
-        if ((this->serverListenerFd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+
+        // Creating the socket file descriptor:
+        if((this->serverListenerFd = socket(AF_INET, SOCK_STREAM, 0)) == 0){
             perror_exit("server::server() - ERR: socket() failed");
         }
-        // Set up the socket options
-        if (setsockopt(this->serverListenerFd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &this->opt, sizeof(this->opt))) {
+
+        // Set up the socket options:
+        if(setsockopt(this->serverListenerFd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &this->listenerOpt, sizeof(this->listenerOpt))){
             perror_exit("server::server() - ERR: setsockopt() failed");
         }
-        this->address.sin_family = AF_INET;
-        this->address.sin_addr.s_addr = INADDR_ANY;
-        this->address.sin_port = htons(port);
-        // Bind the socket to the address we just set up
-        if (bind(this->serverListenerFd, (struct sockaddr *)&this->address, sizeof(this->address))<0) {
+        this->listenerAddress.sin_family = AF_INET;
+        this->listenerAddress.sin_addr.s_addr = INADDR_ANY;
+        this->listenerAddress.sin_port = htons(port);
+
+        // Bind the socket to the address we just set up:
+        if(bind(this->serverListenerFd, (struct sockaddr *)&this->listenerAddress, sizeof(this->listenerAddress))<0){
             perror_exit("server::server() - ERR: bind() failed");
         }
-        // Make the socket listen for connectoins
-        if (listen(this->serverListenerFd, 3) < 0) { // 3 is the maximum number of pending connections, any more and the client will get a "Connection refused" error
+
+        // Make the socket listen for connections:
+        if(listen(this->serverListenerFd, 3) < 0){ // 3 is the maximum number of pending connections, any more and the client will get a "Connection refused" error
             perror_exit("server::server() - ERR: listen() failed");
         }
-        // Start up the thread that listens for and sets up connections
+
+        // Start up the thread that listens for and sets up connections:
         this->servLog.add("server::server() - INFO: Starting listener thread");
         std::thread listenerThread(&server::listenerThreadFunction, this);
         listenerThread.detach(); // Detaching the thread so it doesn't need to be joined
-        // Start the thread which loops over every established connection (which doesnt have an active terminal) and checks if its still alive
+
+        // Start the thread which loops over every established connection (which doesnt have an active terminal) and checks if its still alive:
         this->servLog.add("server::server() - INFO: Starting connectivity check thread");
         std::thread connectivityCheckThread(&server::connectivityCheckThreadFunction, this);
         connectivityCheckThread.detach();
@@ -289,6 +310,10 @@ public:
 
     /*
         Draws all the windows!
+        The funny numbers determine where the windows go, in terms of normalised screen coords
+        (0, 0)      (0, 1)
+
+        (1, 0)      (1, 1)
     */
     void draw(){
         this->drawMenu(0, 0, 0.3, 0.3, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);

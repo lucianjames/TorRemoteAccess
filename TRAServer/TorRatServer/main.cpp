@@ -31,21 +31,16 @@ int main() {
     // Server setup (see server.hpp)
     server serverInstance(serverPort, 16);
     
-    while (true) {
-        if(ImGui::IsKeyPressed(27)){
-            break; // Escape key pressed = exit program cleanly
-        }
-
+    while(!ImGui::IsKeyPressed(27)){ // Exit cleanly if esc pressed
         // Start the frame
         ImTui_ImplNcurses_NewFrame();
         ImTui_ImplText_NewFrame();
         ImGui::NewFrame();
 
-        // Do stuff!
-        serverInstance.update();
-        serverInstance.draw(); // Draws most of the imgui stuff (update() does some too)
+        serverInstance.update(); // Updates connections
+        serverInstance.draw(); // Draws pretty windows
 
-        // Update and render
+        // Render the frame to the terminal
         ImGui::Render();
         ImTui_ImplText_RenderDrawData(ImGui::GetDrawData(), screen);
         ImTui_ImplNcurses_DrawScreen();
