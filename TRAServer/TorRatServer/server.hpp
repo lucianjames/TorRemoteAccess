@@ -24,16 +24,13 @@ private:
     int listenerOpt = 1; // Used for setsockopt
     unsigned int maxConnections; // Maximum number of connections to the server
 
-    bool debugEnabled = false;
     bool fixedLayout = true;
-    bool checkConnectivity = false; // If true, the server will check the connectivity of all connections every connectivityCheckIntervalSeconds seconds
-    int connectivityCheckIntervalSeconds = 10; // Interval between connectivity checks
-
+    bool checkConnectivity = false; // If true, the server will check the connectivity of all connections every connectivityCheckInterval seconds
+    int connectivityCheckInterval = 10; // Interval between connectivity checks
     int selectedConnection = 0; // Index of the selected connection in the connections vector
-    unsigned long int n_conn = 0; // For debugging purposes
     logWindow servLog; // Log window for the server
 
-    
+
 
     /*
         Function that the listener thread runs
@@ -48,13 +45,12 @@ private:
                 // Wait for a new connection:
                 this->servLog.add("server::listenerThreadFunction() - INFO: Waiting for new connection");
                 int newConnectionFd; // The file descriptor for the new connection, will be set by accept() then used to instantiate a new connection object
-                struct sockaddr_in newAddress;
+                struct sockaddr_in newAddress; // Will also be set by accept(), but isnt actually used.
                 int newAddrlen = sizeof(newAddress);
                 if((newConnectionFd = accept(this->serverListenerFd, (struct sockaddr *)&newAddress, (socklen_t*)&newAddrlen))<0){
                     perror_exit("server::listenerThreadFunction() - ERR: accept() failed");
                 }
                 this->servLog.add("server::listenerThreadFunction() - INFO: New connection accepted");
-                this->n_conn++; // Increment the variable used to keep track of the number of connections
 
                 // Create a unique_ptr to a new connection object for the new connection
                 // A unique_ptr will automatically free when no longer used, very cool.
@@ -63,7 +59,6 @@ private:
                 // Verify the connection using the intialConnection() function (part of the connection class)
                 this->servLog.add("server::listenerThreadFunction() - INFO: Verifying connection");
                 if(newConnection->intialConnection()){ // initialConnection returns true if all the right data is received from the client
-                    // Add the new connection to this->connections
                     this->servLog.add("server::listenerThreadFunction() - INFO: Connection verified - adding to the list of connections");
                     this->connectionsMutex.lock(); // Make sure this thread is the only one using the connections vector
                     this->connections.push_back(std::move(newConnection)); // Move ownership of the unique_ptr<connection> to the connections vector
@@ -87,14 +82,14 @@ private:
         this->connectionsMutex.lock();
         for(int i=this->connections.size()-1; i>=0; i--){ // Iterating backwards so erasing items doesnt require decrementing the index
             this->servLog.add("server::connectivityCheckOnce() - INFO: Checking connection " + std::to_string(i));
-            if(!this->connections[i]->connectivityCheck()){ // connectivityCheck returns true if the client is still connected and a valid response was received
+            if(this->connections[i]->connectivityCheck()){ // connectivityCheck returns true if the client is still connected and a valid response was received
+                this->servLog.add("server::connectivityCheckOnce() - INFO: Received valid response from " + std::to_string(i));
+            }else{ // If conn check fails, remove the connection from the vector
                 this->servLog.add("server::connectivityCheckOnce() - INFO: Deleting connection " + std::to_string(i) + " (failed to respond to ping)");
                 this->connections.erase(this->connections.begin() + i);
-                if(this->selectedConnection > i){ // Decrease selected connection if we remove something below the selected connection (makes it so selected terminal doesnt change wrong)
+                if(this->selectedConnection > i){ // Prevents UI selection from messing up
                     this->selectedConnection--;
                 }
-            }else{
-                this->servLog.add("server::connectivityCheckOnce() - INFO: Received valid response from " + std::to_string(i));
             }
         }
         this->connectionsMutex.unlock();
@@ -107,7 +102,7 @@ private:
     */
     void connectivityCheckThreadFunction(){
         while(true){
-            std::this_thread::sleep_for(std::chrono::seconds(connectivityCheckIntervalSeconds));
+            std::this_thread::sleep_for(std::chrono::seconds(connectivityCheckInterval));
             if(this->checkConnectivity){
                 this->servLog.add("server::connectivityCheckThreadFunction() - INFO: Checking connections via connectivityCheckOnce()");
                 this->connectivityCheckOnce();
@@ -118,16 +113,16 @@ private:
     /*
         Draws a menu that can be used to control a few different things
     */
-    void drawMenu(float wWidthStartPercent,
-                  float wHeightStartPercent,
-                  float wWidthEndPercent,
-                  float wHeightEndPercent,
-                  ImGuiCond condition=ImGuiCond_Always){
-        uiHelper::configNextWinPosSizePercent(wWidthStartPercent,
-                                              wHeightStartPercent,
-                                              wWidthEndPercent,
-                                              wHeightEndPercent,
-                                              condition);
+    void drawMenu(float wStartXNorm,
+                  float wStartYNorm,
+                  float wEndXNorm,
+                  float wEndYNorm,
+                  ImGuiCond wCondition=ImGuiCond_Always){
+        uiHelper::setNextWindowSizeNormalised(wStartXNorm,
+                                              wStartYNorm,
+                                              wEndXNorm,
+                                              wEndYNorm,
+                                              wCondition);
         ImGui::Begin("Server Menu");
 
         // Log clearing buttons:
@@ -144,19 +139,15 @@ private:
         ImGui::Dummy(ImVec2(0, 1));
         ImGui::Checkbox("Fixed layout", &this->fixedLayout);
 
-        // Debug checkbox:
-        ImGui::Dummy(ImVec2(0, 1));
-        ImGui::Checkbox("Extra debug windows", &this->debugEnabled);
-
         // Connectivity check checkbox and interval input:
         ImGui::Dummy(ImVec2(0, 1));
         ImGui::Checkbox("Auto conn check", &this->checkConnectivity);
         if(this->checkConnectivity){
             ImGui::Text("Conn check interval (s)");
             ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth()-1.0f);
-            ImGui::InputInt("##Connectivity check interval (s)", &this->connectivityCheckIntervalSeconds);
-            if(this->connectivityCheckIntervalSeconds < 1){ // Will segfault if tries to check every 0 seconds
-                this->connectivityCheckIntervalSeconds = 1;
+            ImGui::InputInt("##Connectivity check interval (s)", &this->connectivityCheckInterval);
+            if(this->connectivityCheckInterval < 1){ // Will segfault if tries to check every 0 seconds
+                this->connectivityCheckInterval = 1;
             }
         }
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
@@ -176,28 +167,29 @@ private:
     /*
         Draws connections list
     */
-    void drawConnectionsList(float wWidthStartPercent,
-                             float wHeightStartPercent,
-                             float wWidthEndPercent,
-                             float wHeightEndPercent,
-                             ImGuiCond condition=ImGuiCond_Always){
-        uiHelper::configNextWinPosSizePercent(wWidthStartPercent,
-                                              wHeightStartPercent,
-                                              wWidthEndPercent,
-                                              wHeightEndPercent,
-                                              condition);
+    void drawConnectionsList(float wStartXNorm,
+                             float wStartYNorm,
+                             float wEndXNorm,
+                             float wEndYNorm,
+                             ImGuiCond wCondition=ImGuiCond_Always){
+        uiHelper::setNextWindowSizeNormalised(wStartXNorm,
+                                              wStartYNorm,
+                                              wEndXNorm,
+                                              wEndYNorm,
+                                              wCondition);
         ImGui::Begin("Server Connections");
 
         // Have to make a vector of strings to pass to the ListBox function
         // Because it requires a pointer to the stuff to write onto the screen >:(
         std::vector<std::string> connInfoStrings; // Creating this every single frame is not very efficient, but its not really a problem
-        this->connectionsMutex.lock(); // Make sure the connections arent being modified while the connInfoStrings are being assembled
-        for(auto &c : this->connections){
-            connInfoStrings.push_back(c->username + "@" + c->hostname + " (" + c->publicIp + ") on socket " + std::to_string(c->sockFd));
-        }
-        this->connectionsMutex.unlock();
         if(connInfoStrings.size() == 0){
             connInfoStrings.push_back("No connections"); // This prevents the listbox from looking weird when there are no connections
+        }else{
+            this->connectionsMutex.lock(); // Make sure the connections arent being modified while the connInfoStrings are being assembled
+            for(auto &c : this->connections){
+                connInfoStrings.push_back(c->username + "@" + c->hostname + " (" + c->publicIp + ") on socket " + std::to_string(c->sockFd));
+            }
+            this->connectionsMutex.unlock();
         }
 
         // Create a listbox with the strings that were just created:
@@ -205,8 +197,8 @@ private:
         ImGui::ListBox("##Connections", 
                        &this->selectedConnection, 
                        [](void* data, int idx, const char** out_text){
-                            std::vector<std::string>* connInfoStrings = (std::vector<std::string>*)data; // Cast the void* to an std::vector<std::string>*
-                            *out_text = connInfoStrings->at(idx).c_str(); // Get a pointer to the string at the current index (idx)
+                            std::vector<std::string>* infoStringsPtr = (std::vector<std::string>*)data; // Cast the void* to an std::vector<std::string>*
+                            *out_text = infoStringsPtr->at(idx).c_str(); // Get a pointer to the string at the current index (idx)
                             return true;
                        },
                        (void*)&connInfoStrings, // This is the void* data variable of the lambda function
@@ -216,40 +208,20 @@ private:
 
         ImGui::End();
     }
-
-    /*
-        Draws debug info
-    */
-    void drawDebugInfo(){
-        // Draw a little bit of server debug info:
-        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
-        ImGui::SetNextWindowSize(ImVec2(30, 4), ImGuiCond_Once);
-        ImGui::Begin("Server Debug Window");
-        ImGui::Text("Number of active connections: %d", this->connections.size());
-        ImGui::Text("Number of connections since start: %d", this->n_conn);
-        ImGui::End();
-
-        // Also, draw the debugging windows built into each connection:
-        this->connectionsMutex.lock(); // Lock the connections vector so no other thread can modify while debug windows are being drawn
-        for(auto &c : this->connections){
-            c->drawDebugWindow(); // Draw each windows debug info window
-        }
-        this->connectionsMutex.unlock();
-    }
     
     /*
         Displays some info about commands and stuff
     */
-    void drawHelp(float wWidthStartPercent,
-                  float wHeightStartPercent,
-                  float wWidthEndPercent,
-                  float wHeightEndPercent,
-                  ImGuiCond condition=ImGuiCond_Always){
-        uiHelper::configNextWinPosSizePercent(wWidthStartPercent,
-                                              wHeightStartPercent,
-                                              wWidthEndPercent,
-                                              wHeightEndPercent,
-                                              condition);
+    void drawHelp(float wStartXNorm,
+                  float wStartYNorm,
+                  float wEndXNorm,
+                  float wEndYNorm,
+                  ImGuiCond wCondition=ImGuiCond_Always){
+        uiHelper::setNextWindowSizeNormalised(wStartXNorm,
+                                              wStartYNorm,
+                                              wEndXNorm,
+                                              wEndYNorm,
+                                              wCondition);
         ImGui::Begin("Info");
         ImGui::TextWrapped("All commands that would be available on a typical windows terminal are available, but there are some extra commands:");
         ImGui::TextWrapped("grab <path> - Grabs a file from the client and saves it to the server at the current directory");
@@ -257,6 +229,7 @@ private:
         ImGui::TextWrapped("clear - Clears the terminal window");
         ImGui::Dummy(ImVec2(0, 1));
         ImGui::TextWrapped("You will also find that a few commands also have linux-like aliases (ls -> dir, rm -> del, etc.)");
+        ImGui::Dummy(ImVec2(0, 1));
         ImGui::TextWrapped("Press the escape key to cleanly exit the program");
         ImGui::End();
     }
@@ -269,9 +242,9 @@ public:
         Constructor - Sets up a socket to listen for new connections on and starts the listener thread
     */
     server(unsigned int port = 8080, unsigned int maxConnections = 32){
+        this->maxConnections = maxConnections;
         this->servLog.setup("Server Log", true, "TRAServer.log");
         this->servLog.add("server::server() - INFO: Starting server");
-        this->maxConnections = maxConnections;
 
         // Creating the socket file descriptor:
         if((this->serverListenerFd = socket(AF_INET, SOCK_STREAM, 0)) == 0){
@@ -317,11 +290,8 @@ public:
     void draw(){
         this->drawMenu(0, 0, 0.3, 0.3, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
         this->drawConnectionsList(0.31, 0, 1.0, 0.3, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
-        if(this->debugEnabled){
-            this->drawDebugInfo();
-        }
         this->connectionsMutex.lock();
-        for(int i=0; i<this->connections.size(); i++){
+        for(int i=0; i<this->connections.size(); i++){ // Draws every active terminal, but its usually just one.
             if(this->connections[i]->terminalActive){
                 this->connections[i]->draw(0, 0.31, 1, 0.85, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
             }
@@ -336,13 +306,14 @@ public:
     */
     void update(){ // Called every frame
         this->connectionsMutex.lock(); // Lock the connections vector so no other thread can modify it while we are updating
-        for(int i=0; i<this->connections.size(); i++){ // For every connection.....
-            if(this->connections[i]->terminalActive && this->selectedConnection != i){ // If a connection is active, but it isnt the currently selected terminal
-                this->servLog.add("server::update() - INFO: terminal " + std::to_string(i) + " closed (moved to background)");
-                this->connections[i]->closeTerminal(); // Do some cleanup, because its about to be moved back to the background
+        for(auto& c : this->connections){
+            bool cIsSelected = this->connections[this->selectedConnection] == c;
+            if(c->terminalActive && !cIsSelected){ // If a connection is active, but it isnt the currently selected terminal
+                this->servLog.add("server::update() - INFO: terminal closed (moved to background)");
+                c->closeTerminal(); // Do some cleanup, because its about to be moved back to the background
             }
-            this->connections[i]->terminalActive = (i==this->selectedConnection)?true:false; // Set the terminalActive variable to true if the connection is currently selected in the UI
-            this->connections[i]->update(); // Update the connection
+            c->terminalActive = cIsSelected; // Make terminal active if selected
+            c->update(); // Update the connection
         }
         this->connectionsMutex.unlock(); // Other threads can have fun again :)
     }

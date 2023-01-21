@@ -16,9 +16,9 @@
 class logWindow{
 private:
     std::vector<std::string> logMessages;
+    std::string title;
     unsigned int windowWidth;
     unsigned int windowHeight;
-    std::string title;
     bool writeToFile = false;
     std::string logFile;
 
@@ -62,16 +62,16 @@ public:
         this->logMutex.unlock();
     }
 
-    void draw(float wWidthStartPercent,
-              float wHeightStartPercent,
-              float wWidthEndPercent,
-              float wHeightEndPercent,
-              ImGuiCond condition=ImGuiCond_Always){
-        uiHelper::configNextWinPosSizePercent(wWidthStartPercent,
-                                              wHeightStartPercent,
-                                              wWidthEndPercent,
-                                              wHeightEndPercent,
-                                              condition);
+    void draw(float wStartXNorm,
+              float wStartYNorm,
+              float wEndXNorm,
+              float wEndYNorm,
+              ImGuiCond wCondition=ImGuiCond_Always){
+        uiHelper::setNextWindowSizeNormalised(wStartXNorm,
+                                              wStartYNorm,
+                                              wEndXNorm,
+                                              wEndYNorm,
+                                              wCondition);
         ImGui::Begin(title.c_str());
 
         // Draw the scrolling text box, adding each item from this->logMessages:

