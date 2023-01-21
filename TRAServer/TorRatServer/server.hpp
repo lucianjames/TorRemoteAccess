@@ -99,7 +99,6 @@ private:
         }
         this->connectionsMutex.unlock();
     }
-    
 
     /*
         Function that the connectivity checking thread runs

