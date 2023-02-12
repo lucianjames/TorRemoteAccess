@@ -182,7 +182,7 @@ private:
         // Have to make a vector of strings to pass to the ListBox function
         // Because it requires a pointer to the stuff to write onto the screen >:(
         std::vector<std::string> connInfoStrings; // Creating this every single frame is not very efficient, but its not really a problem
-        if(connInfoStrings.size() == 0){
+        if(connections.size() == 0){
             connInfoStrings.push_back("No connections"); // This prevents the listbox from looking weird when there are no connections
         }else{
             this->connectionsMutex.lock(); // Make sure the connections arent being modified while the connInfoStrings are being assembled
