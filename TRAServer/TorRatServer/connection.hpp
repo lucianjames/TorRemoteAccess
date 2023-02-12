@@ -12,9 +12,14 @@
 
 /*
     Class for a connection to the server.
-    Decided to put the terminal functions inside this class, hopefully that wasnt a bad idea and it wont    Mostly holds data about the connection.
-    Also has useful functions :) become a mess
+    Decided to put the terminal functions inside this class, hopefully that wasnt a bad idea and it doesnt get too messy
 */
+
+struct fileBrowserEntry{
+    std::string name;
+    bool isDir = false;
+};
+
 class connection{
 private:
     logWindow* servLogWin = nullptr; // Pointer to the log window
@@ -25,7 +30,10 @@ private:
     unsigned int cmdHistSelected = 0;
     std::vector<std::string> plainTextMessageHistory; // Elements of this vector are displayed in the terminal
     std::vector<std::string> commandHistory; // Stores a list of previously sent commands
-    
+
+    // File browser stuff:
+    std::string currentDir = "";
+    std::vector<fileBrowserEntry> currentDirFiles;
 
 
     /*
@@ -82,6 +90,16 @@ private:
         else if(cmd.starts_with("upload ")){
             this->upload(cmd.substr(7));
         }
+
+        // Testing filebrowser-related stuff:
+        else if(cmd.starts_with("fbgwd")){
+            this->genericCmd("filebrowser;gwd;");
+        }
+        else if(cmd.starts_with("fbls")){
+            this->genericCmd("filebrowser;ls;");
+        }
+
+        // If the command is not something special, just send it to the client using exec() and see what happens
         else{
             this->exec(cmd);
         }
@@ -454,10 +472,10 @@ public:
         The list of files/folders is scrollable
     */
     void drawUpdateFileBrowser(float wStartXNorm,
-                         float wStartYNorm,
-                         float wEndXNorm,
-                         float wEndYNorm,
-                         ImGuiCond wCondition=ImGuiCond_Always){
+                               float wStartYNorm,
+                               float wEndXNorm,
+                               float wEndYNorm,
+                               ImGuiCond wCondition=ImGuiCond_Always){
         uiHelper::setNextWindowSizeNormalised(wStartXNorm,
                                               wStartYNorm,
                                               wEndXNorm,
