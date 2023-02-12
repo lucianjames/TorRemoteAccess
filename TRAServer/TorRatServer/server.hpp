@@ -294,7 +294,7 @@ public:
         for(int i=0; i<this->connections.size(); i++){ // Draws every active terminal, but its usually just one.
             if(this->connections[i]->terminalActive){
                 this->connections[i]->draw(0, 0.31, 0.75, 0.85, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
-                this->connections[i]->drawUpdateFileBrowser(0.76, 0.31, 1, 0.85, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
+                this->connections[i]->drawFileBrowser(0.76, 0.31, 1, 0.85, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
             }
         }
         this->connectionsMutex.unlock();

