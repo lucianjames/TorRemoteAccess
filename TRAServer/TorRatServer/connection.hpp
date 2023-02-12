@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <algorithm>
+#include <sstream>
 
 #include "imtui/imtui.h"
 
@@ -18,7 +19,7 @@ class connection{
 private:
     logWindow* servLogWin = nullptr; // Pointer to the log window
     std::mutex sockFdMutex; // Only one thread can use the socket file descriptor at a time
-    std::string msgToSend = ""; // This will be derived from the input buffer
+    std::string commandToSend = ""; // This will be derived from the input buffer
     const unsigned int inputBufferSize = 4096; // Size of the input buffer - could probably get rid of this dumb variable
     char inputBuffer[4096] = {0}; // Used for the text input box
     unsigned int cmdHistSelected = 0;
@@ -430,10 +431,10 @@ public:
         }
 
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth());
-        if(ImGui::InputText("##Input", this->inputBuffer, this->inputBufferSize, ImGuiInputTextFlags_EnterReturnsTrue)){ // If enter is pressed, then set this->msgToSend to the contents of the input buffer
-            this->msgToSend = std::string(this->inputBuffer); // this->msgToSend will be processed when this->update() is called
-            if(this->msgToSend != ""){
-                this->commandHistory.push_back(this->msgToSend);
+        if(ImGui::InputText("##Input", this->inputBuffer, this->inputBufferSize, ImGuiInputTextFlags_EnterReturnsTrue)){ // If enter is pressed, then set this->commandToSend to the contents of the input buffer
+            this->commandToSend = std::string(this->inputBuffer); // this->commandToSend will be processed when this->update() is called
+            if(this->commandToSend != ""){
+                this->commandHistory.push_back(this->commandToSend);
                 this->cmdHistSelected = 0;
                 memset(this->inputBuffer, 0, this->inputBufferSize); // Clear the input buffer
             }
@@ -446,6 +447,44 @@ public:
 
         ImGui::End();
     }
+
+    /*
+file brow        Draws the ser window, also updates its contents
+        Consists of a list of the current directory's files/folders and a button to go up a directory
+        The list of files/folders is scrollable
+    */
+    void drawUpdateFileBrowser(float wStartXNorm,
+                         float wStartYNorm,
+                         float wEndXNorm,
+                         float wEndYNorm,
+                         ImGuiCond wCondition=ImGuiCond_Always){
+        uiHelper::setNextWindowSizeNormalised(wStartXNorm,
+                                              wStartYNorm,
+                                              wEndXNorm,
+                                              wEndYNorm,
+                                              wCondition);
+        ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " file browser DUMMY").c_str());
+
+        // Draw the list of files/folders:
+        ImGui::BeginChild("Scrolling", ImVec2(0, -2), false);
+        // Dummy data for testing purposes:
+        std::vector<std::string> currentDirFiles = {"File1", "File2", "File3", "File4", "Folder1", "Folder2", "Folder3"};
+        for(auto f : currentDirFiles){
+            ImGui::TextWrapped("%s", f.c_str());
+        }
+        if(ImGui::GetScrollY() >= ImGui::GetScrollMaxY()){ // If the window is scrolled to the bottom, scroll down automatically when new text is added
+            ImGui::SetScrollHereY(1.0f);
+        }
+        ImGui::EndChild();
+
+        // Draw the button to go up a directory:
+        if(ImGui::Button("^")){
+            this->commandToSend = "cd .."; // Set this->commandToSend, just like how the user would
+        }
+
+        ImGui::End();
+    }
+
 
     /*
         Handles the initial connection with the client
@@ -495,14 +534,14 @@ public:
     }
 
     /*
-        Parses and sends the command in this->msgToSend if there is one
+        Parses and sends the command in this->commandToSend if there is one
         Also flushes the socket (read everything in recv buff)
     */
     void update(){
-        // If this->msgToSend is not empty, then there is a command that needs to be processed:
-        if(this->msgToSend != ""){
-            this->parseSendCmd(this->msgToSend);
-            this->msgToSend = ""; // Clear msgToSend now that the command has been processed
+        // If this->commandToSend is not empty, then there is a command that needs to be processed:
+        if(this->commandToSend != ""){
+            this->parseSendCmd(this->commandToSend);
+            this->commandToSend = ""; // Clear commandToSend now that the command has been processed
         }
         this->flushSocket(); // Clear out the recv buffer
     }
