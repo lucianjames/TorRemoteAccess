@@ -449,7 +449,7 @@ public:
     }
 
     /*
-file brow        Draws the ser window, also updates its contents
+        Draws the file browser window, also updates its contents
         Consists of a list of the current directory's files/folders and a button to go up a directory
         The list of files/folders is scrollable
     */
