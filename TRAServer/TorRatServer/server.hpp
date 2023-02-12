@@ -182,7 +182,7 @@ private:
         // Have to make a vector of strings to pass to the ListBox function
         // Because it requires a pointer to the stuff to write onto the screen >:(
         std::vector<std::string> connInfoStrings; // Creating this every single frame is not very efficient, but its not really a problem
-        if(connections.size() == 0){
+        if(this->connections.size() == 0){
             connInfoStrings.push_back("No connections"); // This prevents the listbox from looking weird when there are no connections
         }else{
             this->connectionsMutex.lock(); // Make sure the connections arent being modified while the connInfoStrings are being assembled
@@ -293,7 +293,8 @@ public:
         this->connectionsMutex.lock();
         for(int i=0; i<this->connections.size(); i++){ // Draws every active terminal, but its usually just one.
             if(this->connections[i]->terminalActive){
-                this->connections[i]->draw(0, 0.31, 1, 0.85, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
+                this->connections[i]->draw(0, 0.31, 0.75, 0.85, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
+                this->connections[i]->drawUpdateFileBrowser(0.76, 0.31, 1, 0.85, (this->fixedLayout)?ImGuiCond_Always:ImGuiCond_Once);
             }
         }
         this->connectionsMutex.unlock();
