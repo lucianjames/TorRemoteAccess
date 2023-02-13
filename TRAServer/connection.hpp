@@ -5,7 +5,8 @@
 #include <algorithm>
 #include <sstream>
 
-#include "imtui/imtui.h"
+#include <imgui.h>
+#include "imgui_internal.h"
 
 #include "logWindow.hpp"
 #include "uiHelper.hpp"
@@ -530,11 +531,11 @@ public:
         ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " terminal").c_str());
 
         // Draw the scrolling text box, adding each item from this->plainTextMessageHistory:
-        ImGui::BeginChild("Scrolling", ImVec2(0, -2), false);
+        ImGui::BeginChild("Scrolling", ImVec2(0, ImGui::GetWindowHeight()-(ImGui::GetTextLineHeightWithSpacing()*4)), false, ImGuiWindowFlags_HorizontalScrollbar);
         for(auto m : this->plainTextMessageHistory){
             ImGui::TextWrapped("%s", m.c_str());
         }
-        if(ImGui::GetScrollY() >= ImGui::GetScrollMaxY()){ // If the window is scrolled to the bottom, scroll down automatically when new text is added
+        if(ImGui::GetScrollY() >= ImGui::GetScrollMaxY()-1){ // If the window is scrolled to the bottom, scroll down automatically when new text is added
             ImGui::SetScrollHereY(1.0f);
         }
         ImGui::EndChild();
@@ -563,7 +564,7 @@ public:
             }
         }
 
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth());
+        ImGui::SetNextItemWidth(-1);
         if(ImGui::InputText("##Input", this->inputBuffer, this->inputBufferSize, ImGuiInputTextFlags_EnterReturnsTrue)){ // If enter is pressed, then set this->commandToSend to the contents of the input buffer
             this->commandToSend = std::string(this->inputBuffer); // this->commandToSend will be processed when this->update() is called
             if(this->commandToSend != ""){

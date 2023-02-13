@@ -144,14 +144,14 @@ private:
         ImGui::Checkbox("Auto conn check", &this->checkConnectivity);
         if(this->checkConnectivity){
             ImGui::Text("Conn check interval (s)");
-            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth()-1.0f);
+            ImGui::SetNextItemWidth(-1);
             ImGui::InputInt("##Connectivity check interval (s)", &this->connectivityCheckInterval);
             if(this->connectivityCheckInterval < 1){ // Will segfault if tries to check every 0 seconds
                 this->connectivityCheckInterval = 1;
             }
         }
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-        ImGui::PushTextWrapPos(ImGui::GetContentRegionAvailWidth()-1.0f);
+        ImGui::PushTextWrapPos(-1);
         ImGui::TextWrapped("WARN: Connections check may freeze the interface for a second or two");
         ImGui::PopStyleColor();
         ImGui::PopTextWrapPos();
@@ -193,7 +193,7 @@ private:
         }
 
         // Create a listbox with the strings that were just created:
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvailWidth());
+        ImGui::SetNextItemWidth(-1);
         ImGui::ListBox("##Connections", 
                        &this->selectedConnection, 
                        [](void* data, int idx, const char** out_text){
