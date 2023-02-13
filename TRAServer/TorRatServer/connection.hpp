@@ -675,6 +675,8 @@ public:
         this->servLogWin->add("connection::intialConnection() - INFO: Sent confirmation message to client");
 
         this->sockFdMutex.unlock();
+
+        sleep(1); // Wait a second to make sure the connection confirmation message and further messages dont get combined
         this->fileBrowserGetWorkingDir();
         this->fileBrowserUpdate();
         return true;
