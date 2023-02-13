@@ -119,6 +119,7 @@ private:
         // Receive the rest of the response
         unsigned int bytesReceivedTotal = bytesReceived;
         while(bytesReceivedTotal < responseSize){
+            memset(buffer, 0, 4096);
             bytesReceived = recv(this->sockFd, buffer, 4096, 0);
             if(bytesReceived < 0){
                 this->servLogWin->add("connection::fileBrowserUpdate() - ERR: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
@@ -127,12 +128,24 @@ private:
                 return;
             }
             bytesReceivedTotal += bytesReceived;
+            responseString.append(std::string(buffer));
         }
-
-        // Parse the response
-        // For debug, just print it to the log
-        this->servLogWin->add("connection::fileBrowserUpdate() - INFO: Response: " + std::string(buffer));
         this->sockFdMutex.unlock();
+
+        // Parse the response, putting it in this->currentDirFiles
+        this->currentDirFiles.clear();
+        int headerSize = 15+std::to_string(responseSize).length()+1;
+        responseString = responseString.substr(headerSize, responseString.length()-headerSize);
+
+        std::stringstream ss(responseString);
+        std::string token;
+        while(std::getline(ss, token, ';')){
+            this->servLogWin->add("connection::fileBrowserUpdate() - DEBUG: token:" + token);
+            struct fileBrowserEntry fbe;
+            fbe.isDir = token[0]=='1';
+            fbe.name = token.substr(1);
+            this->currentDirFiles.push_back(fbe);
+        }
     }
 
 
@@ -182,6 +195,7 @@ private:
 
         // Special commands that require their own special function:
         else if(cmd.starts_with("cd ")){ // cd cant be handled by exec() becase _popen cant change the working directory of the client executable
+            this->servLogWin->add("connection::parseSendCmd() - INFO: Changing working directory to " + cmd.substr(3));
             this->genericCmd("cd;" + cmd.substr(3) + ";");
             this->fileBrowserGetWorkingDir();
             this->fileBrowserUpdate();
@@ -583,24 +597,34 @@ public:
                                               wEndXNorm,
                                               wEndYNorm,
                                               wCondition);
-        ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " file browser DUMMY").c_str());
+        ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " file browser").c_str());
+
+        // Draw the button to go up a directory:
+        if(ImGui::Button("^")){
+            this->commandToSend = "cd .."; // Set this->commandToSend, just like how the user would
+        }
 
         // Draw the list of files/folders:
         ImGui::BeginChild("Scrolling", ImVec2(0, -2), false);
         // Dummy data for testing purposes:
-        std::vector<std::string> currentDirFiles = {"File1", "File2", "File3", "File4", "Folder1", "Folder2", "Folder3"};
-        for(auto f : currentDirFiles){
-            ImGui::TextWrapped("%s", f.c_str());
+        for(auto f : this->currentDirFiles){
+
+            if(f.isDir){
+                std::string buttonName = f.name;
+                if(ImGui::Button(buttonName.c_str())){
+                    this->commandToSend = "cd " + f.name;
+                }
+            }else{
+                ImGui::TextWrapped("%s", f.name.c_str());
+            }
+
+
         }
         if(ImGui::GetScrollY() >= ImGui::GetScrollMaxY()){ // If the window is scrolled to the bottom, scroll down automatically when new text is added
             ImGui::SetScrollHereY(1.0f);
         }
         ImGui::EndChild();
 
-        // Draw the button to go up a directory:
-        if(ImGui::Button("^")){
-            this->commandToSend = "cd .."; // Set this->commandToSend, just like how the user would
-        }
 
         ImGui::End();
     }
