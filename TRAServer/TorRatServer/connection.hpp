@@ -140,7 +140,6 @@ private:
         std::stringstream ss(responseString);
         std::string token;
         while(std::getline(ss, token, ';')){
-            this->servLogWin->add("connection::fileBrowserUpdate() - DEBUG: token:" + token);
             struct fileBrowserEntry fbe;
             fbe.isDir = token[0]=='1';
             fbe.name = token.substr(1);
@@ -598,9 +597,11 @@ public:
                                               wEndYNorm,
                                               wCondition);
         ImGui::Begin(("Socket " + std::to_string(this->sockFd) + " file browser").c_str());
+        ImGui::TextWrapped("Current directory: %s", this->currentDir.c_str());
+        ImGui::Dummy(ImVec2(0, 2)); // Add some space between the text and the button
 
         // Draw the button to go up a directory:
-        if(ImGui::Button("^")){
+        if(ImGui::Button("^ Parent directory")){
             this->commandToSend = "cd .."; // Set this->commandToSend, just like how the user would
         }
 
@@ -674,6 +675,8 @@ public:
         this->servLogWin->add("connection::intialConnection() - INFO: Sent confirmation message to client");
 
         this->sockFdMutex.unlock();
+        this->fileBrowserGetWorkingDir();
+        this->fileBrowserUpdate();
         return true;
     }
 
