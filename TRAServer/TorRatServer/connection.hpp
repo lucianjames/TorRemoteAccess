@@ -36,25 +36,62 @@ private:
     std::string currentDir = "";
     std::vector<fileBrowserEntry> currentDirFiles;
 
+    // Lock mutex with optional debug output
+    void lockMutex(bool debug = false, const char* funcName = "<unknown>"){
+        if(debug){ this->servLogWin->add("connection::" + std::string(funcName) + "() - DEBUG: Locking socket mutex"); }
+        this->sockFdMutex.lock();
+        if(debug){ this->servLogWin->add("connection::" + std::string(funcName) + "() - DEBUG: Locked socket mutex"); }
+    }
+
+    // Unlock mutex with optional debug output
+    void unlockMutex(bool debug = false, const char* funcName = "<unknown>"){
+        if(debug){ this->servLogWin->add("connection::" + std::string(funcName) + "() - DEBUG: Unlocking socket mutex"); }
+        this->sockFdMutex.unlock();
+        if(debug){ this->servLogWin->add("connection::" + std::string(funcName) + "() - DEBUG: Unlocked socket mutex"); }
+    }
+
+    // Used to log errors from send() and recv()
+    void genericSendRecvErrLog(int bytes, const char* funcName, bool sending){
+        this->servLogWin->add("connection::" + std::string(funcName) + "() - ERROR: " + ((sending)?"send()":"recv()") + " returned " + std::to_string(bytes) + " | " + strerror(errno));
+        this->plainTextMessageHistory.push_back(std::string("Error: ") + ((sending)?"send()":"recv()") + " returned " + std::to_string(bytes) + " | " + strerror(errno));
+    }
+
+    // Returns true if no error, false if error
+    bool recvErrorCheck(int bytesReceived, const char* funcName){
+        if(bytesReceived < 0){
+            genericSendRecvErrLog(bytesReceived, funcName, false);
+            return false;
+        }
+        return true;
+    }
+
+    // Returns true if no error, false if error
+    bool sendErrorCheck(int bytesSent, const char* funcName){
+        if(bytesSent < 0){
+            genericSendRecvErrLog(bytesSent, funcName, true);
+            return false;
+        }
+        return true;
+    }
+
+    /*
+        Sets this->currentDir to the client's current working directory
+    */
     void fileBrowserGetWorkingDir(){
         this->servLogWin->add("connection::fileBrowserGetWorkingDir() - INFO: Called");
-        this->sockFdMutex.lock();
+        this->lockMutex(true, "fileBrowserGetWorkingDir");
         
         int bytesSent = send(this->sockFd, "filebrowser;gwd;", 16, 0);
-        if(bytesSent < 0){
-            this->servLogWin->add("connection::fileBrowserGetWorkingDir() - ERR: send() returned " + std::to_string(bytesSent) + " | " + strerror(errno));
-            this->plainTextMessageHistory.push_back("Error: send() returned " + std::to_string(bytesSent) + " | " + strerror(errno));
-            this->sockFdMutex.unlock();
+        if(!this->sendErrorCheck(bytesSent, "fileBrowserGetWorkingDir")){
+            this->unlockMutex(true, "fileBrowserGetWorkingDir");
             return;
         }
 
         // Read the response from the client
         char buffer[512] = {0}; // 512 is easily enough for a windows path
         int bytesReceived = recv(this->sockFd, buffer, 512, 0);
-        if(bytesReceived < 0){
-            this->servLogWin->add("connection::fileBrowserGetWorkingDir() - ERR: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
-            this->plainTextMessageHistory.push_back("Error: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
-            this->sockFdMutex.unlock();
+        if(!this->recvErrorCheck(bytesReceived, "fileBrowserGetWorkingDir")){
+            this->unlockMutex(true, "fileBrowserGetWorkingDir");
             return;
         }
 
@@ -62,16 +99,16 @@ private:
         // FORMAT: "filebrowser;gwd;[path];"
         std::string response = std::string(buffer);
         if(response.length() < 16){
-            this->servLogWin->add("connection::fileBrowserGetWorkingDir() - ERR: Response too short");
+            this->servLogWin->add("connection::fileBrowserGetWorkingDir() - ERROR: Response too short");
             this->plainTextMessageHistory.push_back("Error: Response too short");
-            this->sockFdMutex.unlock();
+            this->unlockMutex(true, "fileBrowserGetWorkingDir");
             return;
         }
+        this->unlockMutex(true, "fileBrowserGetWorkingDir");
+
         this->currentDir = response.substr(16, response.length() - 17); // Remove the "filebrowser;gwd;" and the ";" at the end
-    
         // For debug, print to log
-        this->servLogWin->add("connection::fileBrowserGetWorkingDir() - INFO: Current working directory: " + this->currentDir);
-        this->sockFdMutex.unlock();
+        this->servLogWin->add("connection::fileBrowserGetWorkingDir() - INFO: Got current working directory: " + this->currentDir);
     }
 
     /*
@@ -79,13 +116,11 @@ private:
     */
     void fileBrowserUpdate(){
         this->servLogWin->add("connection::fileBrowserUpdate() - INFO: Called");
-        this->sockFdMutex.lock();
+        this->lockMutex(true, "fileBrowserUpdate");
 
         int bytesSent = send(this->sockFd, "filebrowser;ls;", 15, 0);
-        if(bytesSent < 0){
-            this->servLogWin->add("connection::fileBrowserGetWorkingDir() - ERR: send() returned " + std::to_string(bytesSent) + " | " + strerror(errno));
-            this->plainTextMessageHistory.push_back("Error: send() returned " + std::to_string(bytesSent) + " | " + strerror(errno));
-            this->sockFdMutex.unlock();
+        if(!this->sendErrorCheck(bytesSent, "fileBrowserUpdate")){
+            this->unlockMutex();
             return;
         }
 
@@ -97,10 +132,8 @@ private:
         this->servLogWin->add("connection::fileBrowserUpdate() - INFO: Receiving first 4096 bytes of response from client...");
         char buffer[4096] = {0};
         int bytesReceived = recv(this->sockFd, buffer, 4096, 0);
-        if(bytesReceived < 0){
-            this->servLogWin->add("connection::fileBrowserUpdate() - ERR: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
-            this->plainTextMessageHistory.push_back("Error: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
-            this->sockFdMutex.unlock();
+        if(!this->recvErrorCheck(bytesReceived, "fileBrowserUpdate")){
+            this->unlockMutex(true, "fileBrowserUpdate");
             return;
         }
 
@@ -110,9 +143,9 @@ private:
         try{
             responseSize = std::stoi(responseString.substr(15, responseString.find(";", 15) - 15));
         }catch(...){
-            this->servLogWin->add("connection::fileBrowserUpdate() - ERR: std::stoi failed, client sent invalid response");
+            this->servLogWin->add("connection::fileBrowserUpdate() - ERROR: std::stoi failed, client sent invalid response");
             this->plainTextMessageHistory.push_back("Error: std::stoi failed, client sent invalid response");
-            this->sockFdMutex.unlock();
+            this->unlockMutex(true, "fileBrowserUpdate");
             return;
         }
         this->servLogWin->add("connection::fileBrowserUpdate() - INFO: Response size: " + std::to_string(responseSize));
@@ -122,16 +155,14 @@ private:
         while(bytesReceivedTotal < responseSize){
             memset(buffer, 0, 4096);
             bytesReceived = recv(this->sockFd, buffer, 4096, 0);
-            if(bytesReceived < 0){
-                this->servLogWin->add("connection::fileBrowserUpdate() - ERR: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
-                this->plainTextMessageHistory.push_back("Error: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
-                this->sockFdMutex.unlock();
+            if(!this->recvErrorCheck(bytesReceived, "fileBrowserUpdate")){
+                this->unlockMutex(true, "fileBrowserUpdate");
                 return;
             }
             bytesReceivedTotal += bytesReceived;
             responseString.append(std::string(buffer));
         }
-        this->sockFdMutex.unlock();
+        this->unlockMutex(true, "fileBrowserUpdate");
 
         // Parse the response, putting it in this->currentDirFiles
         this->currentDirFiles.clear();
@@ -143,7 +174,7 @@ private:
         while(std::getline(ss, token, ';')){
             struct fileBrowserEntry fbe;
             fbe.isDir = token[0]=='1';
-            fbe.name = token.substr(1);
+            fbe.name = token.substr(1); // substr(1) removes the char that specifies whether or not it's a directory
             this->currentDirFiles.push_back(fbe);
         }
     }
@@ -154,7 +185,7 @@ private:
         Uses non-blocking mode
     */
     void flushSocket(){
-        this->sockFdMutex.lock();
+        this->lockMutex();
         char buffer[1024] = {0};
         int flags = fcntl(this->sockFd, F_GETFL, 0); // Save the flags so they can be restored later
         fcntl(this->sockFd, F_SETFL, flags | O_NONBLOCK);
@@ -163,7 +194,7 @@ private:
             bytesReceived = recv(this->sockFd, buffer, 1024, 0);
         }while(bytesReceived > 0);
         fcntl(this->sockFd, F_SETFL, flags);
-        this->sockFdMutex.unlock();
+        this->unlockMutex();
     }
 
     /*
@@ -220,15 +251,13 @@ private:
     */
     void genericCmd(std::string cmd){
         this->servLogWin->add("connection::genericCmd() - INFO: Called with cmd: " + cmd);
-        this->sockFdMutex.lock();
+        this->lockMutex(true, "genericCmd");
 
         // Send the command to the client:
         int bytesSent = send(this->sockFd, cmd.c_str(), cmd.length(), 0);
         this->servLogWin->add("connection::genericCmd() - INFO: Sent " + std::to_string(bytesSent) + " bytes to client");
-        if(bytesSent < 0){ // A negative value indicates an error
-            this->servLogWin->add("connection::genericCmd( - ERR: send() returned " + std::to_string(bytesSent) + " | " + strerror(errno));
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
-            this->sockFdMutex.unlock();
+        if(!this->sendErrorCheck(bytesSent, "genericCmd")){
+            this->unlockMutex(true, "genericCmd");
             return;
         }
 
@@ -236,10 +265,8 @@ private:
         this->servLogWin->add("connection::genericCmd() - INFO: Waiting for response from client (max 4096 bytes)...");
         char cmdRecvBuffer[4096] = {0}; // 4096 bytes should easily be enough for the responses to any commands sent using this function
         int bytesReceived = recv(this->sockFd, cmdRecvBuffer, 4096, 0);
-        if(bytesReceived < 0){ // A negative value here also indicates an error. Not sure if I really need to be handling this error (will it actually occur?)
-            this->servLogWin->add("connection::genericCmd() - ERR: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
-            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
-            this->sockFdMutex.unlock();
+        if(!this->recvErrorCheck(bytesReceived, "genericCmd")){
+            this->unlockMutex(true, "genericCmd");
             return;
         }
 
@@ -248,12 +275,12 @@ private:
         if(cmdRecvBufferString.starts_with(cmd)){ // Protocol requires that the cmd sent is sent back in the response
             this->plainTextMessageHistory.push_back(cmdRecvBufferString.substr(cmd.length(), cmdRecvBufferString.length() - cmd.length() - 1)); // Extract just the <response> from "<cmd>;<response>;"
             this->servLogWin->add("connection::genericCmd() - INFO: Response received and appended to message history");
-            this->sockFdMutex.unlock();
         }else{
             this->servLogWin->add("connection::genericCmd() - WARN: Received an unexpected response from the client");
             this->plainTextMessageHistory.push_back("WARN: Received an unexpected response from the client:");
             this->plainTextMessageHistory.push_back(cmdRecvBufferString);
         }
+        this->unlockMutex(true, "genericCmd");
     }
 
     /*
@@ -264,15 +291,13 @@ private:
     */
     void grab(std::string path){
         this->servLogWin->add("connection::grab() - INFO: Called with path: " + path);
-        this->sockFdMutex.lock();
+        this->lockMutex();
 
         // Send the grab command to the client:
         int bytesSent = send(this->sockFd, ("grab;" + path + ";").c_str(), path.length() + 6, 0);
         this->servLogWin->add("connection::grab() - INFO: Sent " + std::to_string(bytesSent) + " bytes to client");
-        if(bytesSent < 0){
-            this->servLogWin->add("connection::grab() - ERR: send() returned " + std::to_string(bytesSent) + " | " + strerror(errno));
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
-            this->sockFdMutex.unlock();
+        if(!this->sendErrorCheck(bytesSent, "grab")){
+            this->unlockMutex();
             return;
         }
 
@@ -280,30 +305,28 @@ private:
         this->servLogWin->add("connection::grab() - INFO: Receiving first 4096 bytes from client...");
         char grabRecvBuffer[4096] = {0};
         int bytesReceived = recv(this->sockFd, grabRecvBuffer, 4096, 0);
-        if(bytesReceived < 0){
-            this->servLogWin->add("connection::grab() - ERR: recv() returned " + std::to_string(bytesReceived) + " | " + strerror(errno));
-            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
-            this->sockFdMutex.unlock();
+        if(!this->recvErrorCheck(bytesReceived, "grab")){
+            this->unlockMutex();
             return;
         }
 
         // Parse the response to get the file size:
         std::string grabRecvBufferString = std::string(grabRecvBuffer); // Cant use this string for any of the file data, because null terminated :(
         if(grabRecvBufferString.substr(0, 5+path.size()+1) != "grab;" + path + ";" || grabRecvBufferString[5+path.size()+1] == '0'){
-            this->servLogWin->add("connection::grab() - ERR: Received bad response format / file not found");
-            this->plainTextMessageHistory.push_back("ERR: Received bad response format / file not found");
+            this->servLogWin->add("connection::grab() - ERROR: Received bad response format / file not found");
+            this->plainTextMessageHistory.push_back("ERROR: Received bad response format / file not found");
             this->plainTextMessageHistory.push_back(grabRecvBufferString);
             this->plainTextMessageHistory.push_back("grab;" + path + ";");
-            this->sockFdMutex.unlock();
+            this->unlockMutex();
             return;
         }
         long long int fileSize;
         try{
             fileSize = std::stoull(grabRecvBufferString.substr(5+path.size()+1));
         }catch(...){
-            this->servLogWin->add("connection::grab() - ERR: std::stoull failed, client sent invalid response");
-            this->plainTextMessageHistory.push_back("ERR: std::stoull failed, client sent invalid response");
-            this->sockFdMutex.unlock();
+            this->servLogWin->add("connection::grab() - ERROR: std::stoull failed, client sent invalid response");
+            this->plainTextMessageHistory.push_back("ERROR: std::stoull failed, client sent invalid response");
+            this->unlockMutex();
             return;
         }
         this->servLogWin->add("connection::grab() - INFO: Full file size: " + std::to_string(fileSize));
@@ -319,10 +342,8 @@ private:
         }
         while(bytesReceivedTotal < fileSize){
             bytesReceived = recv(this->sockFd, grabRecvBuffer, 4096, 0);
-            if(bytesReceived < 0){
-                // Get the error code and append it to the message history:
-                this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
-                this->sockFdMutex.unlock();
+            if(!this->recvErrorCheck(bytesReceived, "grab")){
+                this->unlockMutex();
                 return;
             }
             fileData.insert(fileData.end(), grabRecvBuffer, grabRecvBuffer+bytesReceived);
@@ -338,7 +359,7 @@ private:
         this->servLogWin->add("connection::grab() - INFO: File written to disk at ./" + path);
         this->plainTextMessageHistory.push_back("File written to disk at ./" + path);
 
-        this->sockFdMutex.unlock();
+        this->unlockMutex();
     }
 
     /*
@@ -351,10 +372,10 @@ private:
         // Open the local file:
         std::ifstream f(path, std::ios::binary);
         if(f.is_open() != true){ // Most likely, the file does not exist
-            this->servLogWin->add("connection::upload() - ERR: File not found");
-            this->plainTextMessageHistory.push_back("ERR: File not found");
+            this->servLogWin->add("connection::upload() - ERROR: File not found");
+            this->plainTextMessageHistory.push_back("ERROR: File not found");
         }else{
-            this->sockFdMutex.lock();
+            this->lockMutex();
 
             // Create the upload request:
             // "upload;<file name>;<file size>;<file data>;"
@@ -368,10 +389,8 @@ private:
 
             // Send the upload request to the client:
             int bytesSent = send(this->sockFd, uploadData.data(), uploadData.size(), 0);
-            if(bytesSent < 0){
-                this->servLogWin->add("ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
-                this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
-                this->sockFdMutex.unlock();
+            if(!this->sendErrorCheck(bytesSent, "upload")){
+                this->unlockMutex();
                 return;
             }
             this->servLogWin->add("connection::upload() - INFO: Sent upload request");
@@ -380,16 +399,14 @@ private:
             char responseBuffer[1024] = {0};
             this->servLogWin->add("connection::upload() - INFO: Waiting for response (max 1024 bytes)");
             int bytesReceived = recv(this->sockFd, responseBuffer, 1024, 0);
-            if(bytesReceived < 0){
-                this->servLogWin->add("connection::upload() - ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
-                this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
-                this->sockFdMutex.unlock();
+            if(!this->recvErrorCheck(bytesReceived, "upload")){
+                this->unlockMutex();
                 return;
             }
             this->servLogWin->add("connection::upload() - INFO: Received response: " + std::string(responseBuffer));
             this->plainTextMessageHistory.push_back("Response: " + std::string(responseBuffer));
             
-            this->sockFdMutex.unlock();
+            this->unlockMutex();
         }
     }
 
@@ -403,14 +420,12 @@ private:
         this->servLogWin->add("connection::exec() - INFO: Called with cmd: " + cmd);
         this->servLogWin->add("connection::exec() - INFO: Automatically appending 2>&1 to the command to receive stderr");
         cmd += " 2>&1"; // Redirects stderr to stdout
-        this->sockFdMutex.lock();
+        this->lockMutex();
 
         // Send the command to the client
         int bytesSent = send(this->sockFd, ("exec;" + cmd + ";").c_str(), cmd.length() + 6, 0);
-        if(bytesSent < 0){
-            this->servLogWin->add("connection::exec() - ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
-            this->plainTextMessageHistory.push_back("ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
-            this->sockFdMutex.unlock();
+        if(!this->sendErrorCheck(bytesSent, "exec")){
+            this->unlockMutex();
             return;
         }
         this->servLogWin->add("connection::exec() - INFO: Sent " + std::to_string(bytesSent) + " bytes of data, waiting for response");
@@ -419,29 +434,27 @@ private:
         char responseBuffer[4096] = {0};
         this->servLogWin->add("connection::exec() - INFO: Receiving first 4096 bytes of response");
         int bytesReceived = recv(this->sockFd, responseBuffer, 4096, 0);
-        if(bytesReceived < 0){
-            this->servLogWin->add("connection::exec() - ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
-            this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
-            this->sockFdMutex.unlock();
+        if(!this->recvErrorCheck(bytesReceived, "exec")){
+            this->unlockMutex();
             return;
         }
 
         // Parse the response size from the response:
         std::string responseBufferString = std::string(responseBuffer);
         if(responseBufferString.substr(0, 6+cmd.size()) != "exec;" + cmd + ";"){
-            this->servLogWin->add("connection::exec() - ERR: Received bad response format");
-            this->plainTextMessageHistory.push_back("ERR: Received bad response format");
+            this->servLogWin->add("connection::exec() - ERROR: Received bad response format");
+            this->plainTextMessageHistory.push_back("ERROR: Received bad response format");
             this->plainTextMessageHistory.push_back(responseBufferString);
-            this->sockFdMutex.unlock();
+            this->unlockMutex();
             return;
         }
         long long int responseSize;
         try{
             responseSize = std::stoull(responseBufferString.substr(6+cmd.size()));
         }catch(...){
-            this->servLogWin->add("connection::exec() - ERR: std::stoull failed, client sent invalid response");
-            this->plainTextMessageHistory.push_back("ERR: std::stoull failed, client sent invalid response");
-            this->sockFdMutex.unlock();
+            this->servLogWin->add("connection::exec() - ERROR: std::stoull failed, client sent invalid response");
+            this->plainTextMessageHistory.push_back("ERROR: std::stoull failed, client sent invalid response");
+            this->unlockMutex();
             return;
         }
         this->servLogWin->add("connection::exec() - INFO: Full response size: " + std::to_string(responseSize));
@@ -459,9 +472,8 @@ private:
         }
         while(bytesReceivedTotal < responseSize){
             bytesReceived = recv(this->sockFd, responseBuffer, 4096, 0);
-            if(bytesReceived < 0){
-                this->plainTextMessageHistory.push_back("ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
-                this->sockFdMutex.unlock();
+            if(!this->recvErrorCheck(bytesReceived, "exec")){
+                this->unlockMutex();
                 return;
             }
             response.insert(response.end(), responseBuffer, responseBuffer+bytesReceived); // Insert the received bytes into the end of the response vector
@@ -478,7 +490,7 @@ private:
             this->plainTextMessageHistory.push_back(line);
         }
         this->servLogWin->add("connection::exec() - INFO: Response received and added to message history successfully");
-        this->sockFdMutex.unlock();
+        this->unlockMutex();
     }
 
 
@@ -500,9 +512,9 @@ public:
     }
 
     ~connection(){
-        this->sockFdMutex.lock();
+        this->lockMutex();
         close(this->sockFd);
-        this->sockFdMutex.unlock();
+        this->unlockMutex();
     }
 
     /*
@@ -633,13 +645,13 @@ public:
     */
     bool intialConnection(){
         this->servLogWin->add("connection::intialConnection() - INFO: Starting initial connection with client");
-        this->sockFdMutex.lock();
+        this->lockMutex();
 
         // Receive the initial connection message from the client:
         char buffer[1024] = {0}; // Should easily be enough space
         int bytesReceived = recv(this->sockFd, buffer, 1024, 0);
-        if(bytesReceived < 0){
-            this->servLogWin->add("connection::intialConnection() - ERR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
+        if(bytesReceived < 0){ // Not using this->recvErrorCheck() because I dont want to print error messages to the console
+            this->servLogWin->add("connection::intialConnection() - ERROR: recv(): " + std::to_string(bytesReceived) + " | " + strerror(errno));
             return false;
         }
         this->servLogWin->add("connection::intialConnection() - INFO: Received initial connection message from client (" + std::to_string(bytesReceived) + " bytes)");
@@ -661,13 +673,13 @@ public:
         // Send the confirmation message to the client, since the connection was successful:
         std::string confirmMsg = this->publicIp + ";" + this->username + ";" + this->hostname + ";connected;";
         int bytesSent = send(this->sockFd, confirmMsg.c_str(), confirmMsg.length(), 0);
-        if(bytesSent < 0){
-            this->servLogWin->add("connection::intialConnection() - ERR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
+        if(bytesSent < 0){ // Not using this->recvErrorCheck() because I dont want to print error messages to the console
+            this->servLogWin->add("connection::intialConnection() - ERROR: send(): " + std::to_string(bytesSent) + " | " + strerror(errno));
             return false;
         }
         this->servLogWin->add("connection::intialConnection() - INFO: Sent confirmation message to client");
 
-        this->sockFdMutex.unlock();
+        this->unlockMutex();
 
         sleep(1); // Wait a second to make sure the connection confirmation message and further messages dont get combined
         this->fileBrowserGetWorkingDir();
@@ -692,19 +704,19 @@ public:
         Returns true if the client responds to "ping;" with "pong;"
     */
     bool connectivityCheck(){
-        this->sockFdMutex.lock();
+        this->lockMutex();
         int bytesSent = send(this->sockFd, "ping;", 5, 0);
         if(bytesSent != 5){
-            this->sockFdMutex.unlock();
+            this->unlockMutex();
             return false;
         }
         char buffer[10] = {0};
         int bytesReceived = recv(this->sockFd, buffer, 10, 0);
         if(std::string(buffer) != "ping;pong;"){
-            this->sockFdMutex.unlock();
+            this->unlockMutex();
             return false;
         }
-        this->sockFdMutex.unlock();
+        this->unlockMutex();
         return true;
     }
 
