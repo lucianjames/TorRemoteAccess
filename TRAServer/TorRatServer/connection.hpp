@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <sstream>
+#include <sys/socket.h>
 
 #include "imtui/imtui.h"
 
@@ -204,14 +205,6 @@ private:
         }
         else if(cmd.starts_with("upload ")){
             this->upload(cmd.substr(7));
-        }
-
-        // Testing filebrowser-related stuff:
-        else if(cmd.starts_with("fbgwd")){
-            this->genericCmd("filebrowser;gwd;");
-        }
-        else if(cmd.starts_with("fbls")){
-            this->genericCmd("filebrowser;ls;");
         }
 
         // If the command is not something special, just send it to the client using exec() and see what happens
