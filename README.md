@@ -1,7 +1,18 @@
 # TorRemoteAccess
-!! VERY WORK IN PROGRESS !!
+Work in progress and not suitable for real-world deployment, especially as a malicious tool.
+I have mainly been developing this project as multi-threaded socket programming practice.
+# Features
+* Execute shell commands
+* Grab files using `grab <filename>`
+* Upload files using `upload <localfilepath>`
+* Basic file browser for easy navigation of client filesystem
+* TOR built into client as a resource, creating a standalone executable
+* Detailed logging for debugging
+* ImGui interface inside the terminal via ImTui (https://github.com/ggerganov/imtui)
 
-![image](https://user-images.githubusercontent.com/65134690/212556242-96c63b4e-0faa-4404-8ef9-35898eb66ac3.png)
+
+![image](https://user-images.githubusercontent.com/65134690/218818717-4d0e5c3e-c7b5-4ea0-bf8b-163a18d09c6b.png)
+
 
 # Setup
 ## Compiling the server
