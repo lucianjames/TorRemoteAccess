@@ -196,10 +196,15 @@ public:
         }
         else if (cmd.starts_with("ls;")) {
             std::string response = "filebrowser;ls;";
-            for (const auto& f : std::filesystem::directory_iterator(".")) {
-                response.push_back(std::filesystem::is_directory(f) ? '1' : '0');
-                response += f.path().string();
-                response += ";";
+            try {
+                for (const auto& f : std::filesystem::directory_iterator(".")) {
+                    response.push_back(std::filesystem::is_directory(f) ? '1' : '0');
+                    response += f.path().string();
+                    response += ";";
+                }
+            }
+            catch (...) { // An ugly way to handle the directory iterator failing :) (i could probably just do validation and then i wouldnt need to try-catch lol)
+                response = "Filesystem error; " + cmd;
             }
             this->torSock.proxySendStr(response);
         }
