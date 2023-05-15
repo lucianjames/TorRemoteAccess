@@ -27,7 +27,7 @@ void writeResToDisk(std::string path, int r, int t){
 
 
 #define torExePath ".\\taw.exe" // taw pwoxy uwu
-#define HOST "lj3dtor6aftsz6koehgz7j7wroel6hrtcmiw4y7x2vkasjnoz2w5e3qd.onion"
+#define HOST "ahd3nvwnbwr6i63cly6p6dnlb2yuvpgnf6773dht2jy4vukoyaii3vqd.onion"
 #define showConsole true
 
 
