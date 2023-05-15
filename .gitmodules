@@ -4,3 +4,6 @@
 [submodule "TRAServer/imtui-tweaks"]
 	path = TRAServer/imtui-tweaks
 	url = https://github.com/LJ3D/imtui-tweaks
+[submodule "TRAServer/TorRatServer/TorPlusPlus"]
+	path = TRAServer/TorRatServer/TorPlusPlus
+	url = https://github.com/LJ3D/TorPlusPlus
