@@ -3,16 +3,22 @@
 #include "imtui/imtui.h"
 #include "imtui/imtui-impl-ncurses.h"
 
+#include "TorPlusPlus/torplusplus.hpp"
+
 #include "checkTor.hpp"
 #include "server.hpp"
 
-#define serverPort 52727
+#define externPort 1337
+#define internPort 52727
 
 int main() {
-    if(!torRunning()){
-        printf("Tor is not running! Please start tor before running this program.\n(Failed to connect to 127.0.0.1:9050)\n");
-        return 1;
-    }
+    // Start TOR using torplusplus
+    // Assumes tor is installed as a command
+    torPlusPlus::TOR tor(9051, ".tratpptorrc");
+    tor.addService("./serverService", externPort, internPort);
+    tor.start();
+    // tor.start() has functionality to check if tor started correctly
+    // so dont need to worry about verifying it
 
     // Make all threads ignore SIGPIPE
     // This is so that if a connection is closed, the program doesn't crash
@@ -29,7 +35,7 @@ int main() {
     ImTui_ImplText_Init();
 
     // Server setup (see server.hpp)
-    server serverInstance(serverPort, 16);
+    server serverInstance(internPort, 16);
     
     while(!ImGui::IsKeyPressed(27)){ // Exit cleanly if esc pressed
         // Start the frame
